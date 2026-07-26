@@ -1,0 +1,11 @@
+{
+  "name": "wohn-index",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "npm --prefix frontend test",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "build:frontend": "npm --prefix frontend run build",
+    "monte-carlo": "node scripts/profile_monte_carlo.mjs"
+  }
+}

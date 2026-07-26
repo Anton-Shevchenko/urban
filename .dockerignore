@@ -1,0 +1,12 @@
+.venv
+**/__pycache__
+**/*.pyc
+.git
+frontend/node_modules
+frontend/dist
+data/cities
+data/cache
+data/gtfs
+data/zensus
+.DS_Store
+**/.vite

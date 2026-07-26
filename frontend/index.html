@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <script>
+      try {
+        var t = localStorage.getItem('wohnindex.theme');
+        if (t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t);
+      } catch (e) {}
+    </script>
+    <title>15-Minuten-Living-Score · Deutschland</title>
+    <meta
+      name="description"
+      content="Wie gut lässt es sich hier ohne Auto leben? 15-Minuten-Living-Score für deutsche Städte."
+    />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

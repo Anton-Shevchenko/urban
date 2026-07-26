@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <title>Wohn-Index · Komfort inkl. Miete</title>
+  <meta name="description" content="Interaktive Karte deutscher Städte mit objektiven und persönlichen Komfort-Faktoren." />
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
+  <link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body>
+  <div id="map"></div>
+
+  <aside id="panel" aria-label="Steuerung">
+    <header class="panel-head">
+      <h1 id="city-title">München Wohn-Index</h1>
+      <p class="subtitle">Relative Eignung innerhalb der Stadt · 0–100</p>
+    </header>
+
+    <section class="search">
+      <span class="section-label">Stadt suchen</span>
+      <form id="search-form" class="search-form" role="search">
+        <input id="search-input" type="search" placeholder="z. B. Hamburg, Köln, Leipzig …"
+               autocomplete="off" aria-label="Deutsche Stadt suchen" />
+        <button type="submit" id="search-btn">Los</button>
+      </form>
+      <p id="search-status" class="search-status" role="status" hidden></p>
+    </section>
+
+    <section class="presets">
+      <span class="section-label">Presets</span>
+      <div class="preset-row">
+        <button class="preset" data-preset="balanced">Ausgewogen</button>
+        <button class="preset" data-preset="quiet">Ruhe</button>
+        <button class="preset" data-preset="central">Zentral</button>
+        <button class="preset" data-preset="business">Business</button>
+        <button class="preset" data-preset="family">Familie</button>
+        <button class="preset" data-preset="budget">Günstig</button>
+      </div>
+    </section>
+
+    <section class="sliders sliders-positive">
+      <span class="section-label">Objektiv positiv</span>
+      <p class="section-hint">Kürzer / häufiger / günstiger = besser</p>
+
+      <label class="slider">
+        <span class="slider-top"><span>🏙️ Nähe zum Zentrum</span><b id="w-center-val">Wichtig</b></span>
+        <input type="range" id="w-center" min="0" max="4" step="1" value="3" data-factor="center" />
+      </label>
+      <label class="slider" id="slider-daily-needs">
+        <span class="slider-top"><span>🛒 Alltag (Daily needs)</span><b id="w-daily_needs-val">Mittel</b></span>
+        <input type="range" id="w-daily_needs" min="0" max="4" step="1" value="2" data-factor="daily_needs" />
+      </label>
+      <p id="daily-needs-hint" class="section-hint is-warn" hidden>Daten fehlen — Stadt erneut suchen, um Alltag zu aktivieren.</p>
+      <div class="category-toggles" id="daily-needs-toggles"></div>
+      <label class="slider" id="slider-transit">
+        <span class="slider-top"><span>🚇 ÖPNV-Takt</span><b id="w-transit_service-val">Mittel</b></span>
+        <input type="range" id="w-transit_service" min="0" max="4" step="1" value="2" data-factor="transit_service" />
+      </label>
+      <label class="slider">
+        <span class="slider-top"><span>🌳 Grün / Wasser</span><b id="w-green-val">Mittel</b></span>
+        <input type="range" id="w-green" min="0" max="4" step="1" value="2" data-factor="green" />
+      </label>
+      <label class="slider" id="slider-price">
+        <span class="slider-top"><span>💶 Günstige Miete</span><b id="w-price-val">Mittel</b></span>
+        <input type="range" id="w-price" min="0" max="4" step="1" value="2" data-factor="price" />
+      </label>
+      <div class="rent-budget" id="rent-budget-panel">
+        <label class="budget-field">
+          <span>Wohnfläche (m²)</span>
+          <input type="number" id="rent-area" min="20" max="250" step="5" value="60" />
+        </label>
+        <label class="budget-field">
+          <span>Max. Warmmiete (€/Monat)</span>
+          <input type="number" id="rent-budget" min="0" step="50" placeholder="z. B. 1500" />
+        </label>
+        <p class="section-hint">Warmmiete inkl. ~4 €/m² Nebenkosten (Kaltmiete aus Daten). Leer = €/m²-Skala.</p>
+      </div>
+    </section>
+
+    <section class="sliders sliders-negative">
+      <span class="section-label">Objektiv negativ</span>
+      <p class="section-hint">Weniger Lärm / Hitze / Risiko = besser</p>
+
+      <label class="slider">
+        <span class="slider-top"><span>🔇 Ruhe (Lärm)</span><b id="w-noise-val">Mittel</b></span>
+        <input type="range" id="w-noise" min="0" max="4" step="1" value="2" data-factor="noise" />
+      </label>
+      <label class="slider" id="slider-heat">
+        <span class="slider-top"><span>🌡️ Hitze-Resilienz</span><b id="w-heat-val">Mittel</b></span>
+        <input type="range" id="w-heat" min="0" max="4" step="1" value="2" data-factor="heat" />
+      </label>
+      <label class="slider" id="slider-safety">
+        <span class="slider-top"><span>🚸 Straßenrisiko (OSM)</span><b id="w-traffic_safety-val">Gering</b></span>
+        <input type="range" id="w-traffic_safety" min="0" max="4" step="1" value="1" data-factor="traffic_safety" />
+        <span class="slider-hint">Nur Verkehrsrisiko — keine Kriminalitätsdaten</span>
+      </label>
+    </section>
+
+    <section class="sliders sliders-preference">
+      <span class="section-label">Persönliche Präferenz</span>
+      <p class="section-hint">Optional — nur wenn mehrere Faktoren aktiv sind</p>
+      <label class="cat-toggle pref-toggle">
+        <input type="checkbox" id="pref-include" />
+        Präferenzen in den Index einbeziehen
+      </label>
+
+      <label class="slider pref-slider">
+        <span class="slider-top"><span>🏘️ Städtische Aktivität</span><b id="pref-urban_activity-val">Mittel</b></span>
+        <span class="pref-labels"><span>Ruhig</span><span>Lebhaft</span></span>
+        <input type="range" id="pref-urban_activity" min="0" max="100" step="5" value="50" />
+      </label>
+      <label class="slider pref-slider" id="slider-density">
+        <span class="slider-top"><span>👥 Bevölkerungsdichte</span><b id="pref-density-val">Mittel</b></span>
+        <span class="pref-labels"><span>Geräumig</span><span>Dicht</span></span>
+        <input type="range" id="pref-density" min="0" max="100" step="5" value="50" />
+      </label>
+      <label class="slider pref-slider" id="slider-housing">
+        <span class="slider-top"><span>🏠 Gebäudealter</span><b id="pref-housing-val">Mittel</b></span>
+        <span class="pref-labels"><span>Altbau</span><span>Neubau</span></span>
+        <input type="range" id="pref-housing" min="0" max="100" step="5" value="30" />
+      </label>
+    </section>
+
+    <section class="destinations" id="dest-section">
+      <span class="section-label">Meine Ziele</span>
+      <p class="section-hint">Klicke auf die Karte (max. 3 Ziele)</p>
+      <div id="dest-list" class="dest-list"></div>
+      <label class="slider" id="slider-custom">
+        <span class="slider-top"><span>📍 Eigene Ziele</span><b id="w-custom_dest-val">Egal</b></span>
+        <input type="range" id="w-custom_dest" min="0" max="4" step="1" value="0" data-factor="custom_dest" />
+      </label>
+    </section>
+
+    <section class="legend">
+      <span class="section-label" id="legend-title">Persönliche Standortbewertung</span>
+      <label class="map-view-field">
+        <span>Kartenansicht</span>
+        <select id="map-view" aria-label="Kartenansicht wählen">
+          <option value="comfort">Gesamtbewertung</option>
+        </select>
+      </label>
+      <div class="legend-bar" id="legend-bar"></div>
+      <div class="legend-scale"><span>0 niedrig</span><span>100 hoch</span></div>
+      <p class="section-hint legend-note" id="legend-note">≈ = geschätzte Daten (OSM-Proxy, Modell)</p>
+    </section>
+
+    <footer class="panel-foot">
+      <span id="hex-count"></span>
+      <nav>
+        <a href="legal/impressum.html">Impressum</a> ·
+        <a href="legal/datenschutz.html">Datenschutz</a>
+      </nav>
+      <p class="attribution">
+        Daten © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>,
+        Zensus 2022, GTFS (Mobilithek).
+      </p>
+      <p class="disclaimer">Informativ, keine Rechts-/Immobilienberatung.</p>
+    </footer>
+  </aside>
+
+  <aside id="compare-panel" aria-label="Wohnungen vergleichen" hidden>
+    <header class="compare-head">
+      <h2>Wohnungen vergleichen</h2>
+      <button id="compare-clear" type="button">Alle löschen</button>
+    </header>
+    <p class="compare-hint">Nur absolute Schwellen — vergleichbar zwischen Städten.</p>
+    <div id="compare-list" class="compare-list"></div>
+  </aside>
+
+  <div id="compare-empty" class="compare-empty">Auf ein Hexagon klicken, um es zum Vergleich hinzuzufügen.</div>
+  <div id="tooltip" class="tooltip" hidden></div>
+  <div id="loading" class="loading">Lade Daten …</div>
+
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+  <script src="assets/color.js?v=9"></script>
+  <script src="assets/app.js?v=9"></script>
+</body>
+</html>

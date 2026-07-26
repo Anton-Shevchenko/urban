@@ -1,0 +1,27 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Pipeline cache (regenerable). The final frontend/public/data/hexes.geojson IS committed
+# so the site works without re-running the pipeline.
+data/cache/
+
+# Per-city generated data (regenerable on demand by the backend, can be large).
+data/cities/
+
+# SQLite city store (regenerable from data/cities/*/hexes.geojson)
+data/wohnindex.db
+data/*.db-journal
+data/*.db-wal
+data/*.db-shm
+
+# Node
+node_modules/
+frontend/dist/
+frontend/node_modules/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/

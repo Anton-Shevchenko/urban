@@ -1,0 +1,14 @@
+# Munich Spatial Value Index - pipeline dependencies
+# Install:  python -m venv .venv && ./.venv/bin/pip install -r pipeline/requirements.txt
+geopandas==1.1.4
+h3==4.5.0
+shapely==2.1.2
+pyproj==3.7.2
+numpy==2.5.1
+pandas==3.0.3
+requests==2.34.2
+pyarrow==25.0.0
+
+# Optional: real public-transit / driving travel times via OpenRouteService.
+# Not required (the transit step has a distance-based fallback).
+openrouteservice==2.3.3
