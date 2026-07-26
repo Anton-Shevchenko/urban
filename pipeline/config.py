@@ -196,21 +196,26 @@ CITY_BUNDESLAND = {
     "brandenburg-an-der-havel": "BB",
 }
 
-# --- 15-Minute Living Score (7-metric foundation) --------------------------
-# Profiles may reweight these in the frontend.
+# --- 15-Minute Living Score (objective-v2) ---------------------------------
+# Absolute objective weights (no centrality). Frontend Personal Match may
+# reweight separately; do not blend user prefs into s_living.
+SCORE_METHOD_VERSION = "objective-v2"
+
 LIVING_SCORE_WEIGHTS = {
     "daily_life": 0.20,
-    "walk": 0.20,
+    "walk": 0.15,
     "green": 0.15,
     "transit": 0.15,
-    "centrality": 0.10,
-    "quiet": 0.10,
-    "housing_value": 0.10,
+    "quiet": 0.15,
+    "housing_affordability": 0.20,
 }
 # Back-compat aliases used by older code paths.
 LIVING_SCORE_WEIGHTS["walking_quality"] = LIVING_SCORE_WEIGHTS["walk"]
-LIVING_SCORE_WEIGHTS["center"] = LIVING_SCORE_WEIGHTS["centrality"]
 LIVING_SCORE_WEIGHTS["noise"] = LIVING_SCORE_WEIGHTS["quiet"]
+LIVING_SCORE_WEIGHTS["housing_value"] = LIVING_SCORE_WEIGHTS["housing_affordability"]
+# Centrality kept for informational / match export only (weight 0 in objective).
+LIVING_SCORE_WEIGHTS["centrality"] = 0.0
+LIVING_SCORE_WEIGHTS["center"] = 0.0
 
 # Daily-life group weights (parks → Green Index, not here).
 DAILY_LIFE_GROUP_WEIGHTS = {
@@ -219,7 +224,17 @@ DAILY_LIFE_GROUP_WEIGHTS = {
     "education": 0.20,
     "services": 0.15,
     "restaurants_cafes": 0.10,
-    "other": 0.10,
+    "other": 0.10,  # leisure alias in frontend
+}
+
+# Within-group category weights (not max). Keys must match DAILY_LIFE_AMENITIES.
+DAILY_LIFE_CATEGORY_WEIGHTS = {
+    "food": {"supermarket": 0.60, "market": 0.25, "bakery": 0.15},
+    "health": {"doctor": 0.40, "clinic": 0.35, "pharmacy": 0.25},
+    "education": {"kita": 0.50, "school": 0.50},
+    "services": {"administration": 0.40, "bank": 0.30, "post": 0.30},
+    "restaurants_cafes": {"restaurant": 0.60, "cafe": 0.40},
+    "other": {"sports": 0.60, "playground": 0.40},
 }
 
 # Legacy Match groups (dormant — Match Score deferred).
@@ -232,7 +247,7 @@ MATCH_INFRASTRUCTURE_GROUP_WEIGHTS = {
     "shopping": 0.10,
 }
 
-# Amenity → life group. Nearest walk-band score per amenity; max within group.
+# Amenity → life group. Weighted within group (see DAILY_LIFE_CATEGORY_WEIGHTS).
 DAILY_LIFE_AMENITIES: dict[str, str] = {
     "bakery": "food",
     "supermarket": "food",
@@ -244,11 +259,12 @@ DAILY_LIFE_AMENITIES: dict[str, str] = {
     "school": "education",
     "bank": "services",
     "administration": "services",
+    "post": "services",
     "restaurant": "restaurants_cafes",
     "cafe": "restaurants_cafes",
-    "post": "other",
     "sports": "other",
-    # Parks / playgrounds intentionally omitted — Green Index owns them.
+    "playground": "other",
+    # Parks intentionally omitted — Green Index owns them.
 }
 
 # Legacy exponential walk-minute decay (kept for diagnostics / back-compat).
@@ -457,7 +473,7 @@ OSM_DAILY_NEEDS_FILE = "osm_daily_needs.parquet"
 OSM_BUILDINGS_FILE = "osm_buildings.parquet"
 OSM_LANDUSE_FILE = "osm_landuse.parquet"
 
-PIPELINE_SCHEMA_VERSION = 14
+PIPELINE_SCHEMA_VERSION = 15
 
 # Value Opportunity Index (Hidden Gems) — H3 neighbour ring (~1 km at res 9).
 VOI_NEIGHBOR_K = 4

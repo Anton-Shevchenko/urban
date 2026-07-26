@@ -5,16 +5,34 @@ import type { WohnIndexState, CompareItem } from '../hooks/useWohnIndex';
 type Props = { state: WohnIndexState };
 
 function computeCard(item: CompareItem, engine: WohnIndexState['engine']) {
-  const result = engine.livingScore
-    ? engine.livingScore(item.props)
-    : { score: engine.comfortScalar(item.props) ?? 50, pillars: {} as Record<string, number> };
-  const comfort = result.score;
+  const result = engine.locationScore
+    ? engine.locationScore(item.props)
+    : engine.livingScore
+      ? engine.livingScore(item.props)
+      : {
+          score: engine.comfortScalar(item.props),
+          objectiveScore: engine.comfortScalar(item.props),
+          personalMatchScore: null,
+          cityPercentile: null,
+          confidence: 0,
+          pillars: {} as Record<string, number | null>,
+        };
+  const comfort = result.objectiveScore ?? result.score;
   const size = Number(item.sizeM2);
   const price = Number(item.pricePerM2);
   const total = Number.isFinite(size) && size > 0 && Number.isFinite(price) && price > 0 ? size * price : null;
-  const ratio = Number.isFinite(price) && price > 0 ? comfort / price : null;
-  const [r, g, b] = ramp(comfort);
-  return { comfort, total, ratio, color: `rgb(${r},${g},${b})`, pillars: result.pillars };
+  const ratio = comfort != null && Number.isFinite(price) && price > 0 ? comfort / price : null;
+  const [r, g, b] = ramp(comfort ?? 0);
+  return {
+    comfort,
+    match: result.personalMatchScore ?? null,
+    percentile: result.cityPercentile ?? null,
+    confidence: result.confidence ?? null,
+    total,
+    ratio,
+    color: comfort == null ? '#BDBDBD' : `rgb(${r},${g},${b})`,
+    pillars: result.pillars,
+  };
 }
 
 const euro = (v: number) => v.toLocaleString('de-DE', { maximumFractionDigits: 0 }) + ' €';
@@ -59,17 +77,28 @@ export function ComparePanel({ state }: Props) {
               </div>
               <div className="cc-badge" style={{ background: m.color }}>
                 <span>Living Score</span>
-                <b>{m.comfort.toFixed(0)}</b>
+                <b>{m.comfort == null ? '—' : m.comfort.toFixed(0)}</b>
               </div>
+              <p className="section-hint">
+                Your Match: {m.match == null ? '—' : Math.round(m.match)}
+                {' · '}City percentile: {m.percentile == null ? '—' : Math.round(m.percentile)}
+                {' · '}Confidence: {m.confidence == null ? '—' : `${Math.round(m.confidence * 100)}%`}
+              </p>
               <table className="cc-factors">
                 <tbody>
-                  {(Object.keys(PILLAR_LABELS) as (keyof typeof PILLAR_LABELS)[]).map((key) => (
+                  {Object.entries(PILLAR_LABELS)
+                    .filter(([key]) => key !== 'housing_value')
+                    .map(([key, label]) => {
+                      const pillars = m.pillars as Record<string, number | null | undefined>;
+                      const val = pillars[key];
+                      return (
                     <tr key={key}>
-                      <td>{PILLAR_LABELS[key]}</td>
+                      <td>{label}</td>
                       <td>–</td>
-                      <td>{(m.pillars[key] ?? 0).toFixed(0)}</td>
+                      <td>{val == null ? '—' : Number(val).toFixed(0)}</td>
                     </tr>
-                  ))}
+                      );
+                  })}
                 </tbody>
               </table>
               <div className="cc-inputs">

@@ -23,7 +23,6 @@ from .score_scales import (
     density_sweet_spot_score,
     green_composite_strict,
     green_quality_score,
-    housing_value_score,
     living_score_composite,
     noise_quiet_score,
     rent_kalt_lenient,
@@ -335,16 +334,23 @@ def build(ctx: CityContext) -> gpd.GeoDataFrame:
         walk_raw = _derive_walking_quality(df)
     df["walk_raw"] = walk_raw
 
-    # --- City normalization → final living metrics -------------------------
-    df["s_daily_life"] = city_normalize(daily_raw, city_type, "daily_life")
+    # --- Objective pillars (absolute) + city-context legacy columns --------
+    # objective-v2: s_* pillars used for Living Score are absolute / raw.
+    # City-normalized copies kept as s_*_city for diagnostics / percentile.
+    df["s_daily_life"] = daily_raw.clip(0, 100).round(1)
+    df["s_daily_life_city"] = city_normalize(daily_raw, city_type, "daily_life")
     df["s_daily_needs"] = df["s_daily_life"]
-    df["s_walk"] = city_normalize(walk_raw, city_type, "walk")
+    df["s_walk"] = walk_raw.clip(0, 100).round(1)
+    df["s_walk_city"] = city_normalize(walk_raw, city_type, "walk")
     df["s_walking_quality"] = df["s_walk"]
-    df["s_transit"] = city_normalize(transit_raw, city_type, "transit")
+    df["s_transit"] = transit_raw.clip(0, 100).round(1)
+    df["s_transit_city"] = city_normalize(transit_raw, city_type, "transit")
     df["s_transit_service"] = df["s_transit"]
-    df["s_green"] = city_normalize(df["green_raw"], city_type, "green")
+    df["s_green"] = df["green_raw"].clip(0, 100).round(1)
+    df["s_green_city"] = city_normalize(df["green_raw"], city_type, "green")
     df["s_center"] = city_normalize(df["centrality_raw"], city_type, "centrality")
-    df["s_quiet"] = city_normalize(df["quiet_raw"], city_type, "quiet")
+    df["s_quiet"] = df["quiet_raw"].clip(0, 100).round(1)
+    df["s_quiet_city"] = city_normalize(df["quiet_raw"], city_type, "quiet")
     df["s_noise"] = df["s_quiet"]  # quiet = high
 
     if "heat_resilience_score" in df.columns:
@@ -377,7 +383,9 @@ def build(ctx: CityContext) -> gpd.GeoDataFrame:
     if "rent_eur_m2" in df.columns:
         df["s_rent_relative_city"] = rent_percentile_score(df["rent_eur_m2"])
         df["s_rent_kalt_benchmark"] = rent_kalt_lenient(df["rent_eur_m2"])
-        df["s_rent_absolute"] = df["s_rent_relative_city"]
+        # Absolute affordability for Objective Score (not city-relative).
+        df["s_housing_affordability"] = df["s_rent_kalt_benchmark"]
+        df["s_rent_absolute"] = df["s_rent_kalt_benchmark"]
         df["s_rent_strict"] = rent_kalt_strict(df["rent_eur_m2"])
         df["s_rent_absolute_legacy"] = _rent_absolute_legacy(df["rent_eur_m2"])
         df["rent_monthly_est"] = ((df["rent_eur_m2"] + DEFAULT_NEBENKOSTEN_EUR_M2) * DEFAULT_RENT_AREA_M2).round(0)
@@ -386,16 +394,11 @@ def build(ctx: CityContext) -> gpd.GeoDataFrame:
         df["s_rent_value"] = rent_value_score(
             df["s_rent_relative_city"], df["s_transit"], df["s_daily_life"],
         )
-        hv_raw = housing_value_score(
-            df["s_rent_relative_city"], df["s_daily_life"], df["s_transit"], df["s_walk"],
-        )
-        df["s_housing_value"] = city_normalize(hv_raw, city_type, "housing_value")
+        # Legacy alias — affordability only (no daily_life/walk/transit double-count).
+        df["s_housing_value"] = df["s_housing_affordability"]
     else:
-        df["s_housing_value"] = city_normalize(
-            (0.5 * df["s_daily_life"] + 0.5 * df["s_transit"]).clip(0, 100),
-            city_type,
-            "housing_value",
-        )
+        df["s_housing_affordability"] = pd.Series(np.nan, index=df.index)
+        df["s_housing_value"] = df["s_housing_affordability"]
 
     df["s_living"] = living_score_composite(
         {
@@ -403,12 +406,12 @@ def build(ctx: CityContext) -> gpd.GeoDataFrame:
             "walk": df["s_walk"],
             "green": df["s_green"],
             "transit": df["s_transit"],
-            "centrality": df["s_center"],
             "quiet": df["s_quiet"],
-            "housing_value": df["s_housing_value"],
+            "housing_affordability": df["s_housing_affordability"],
         },
         config.LIVING_SCORE_WEIGHTS,
     )
+    df["s_objective"] = df["s_living"]
 
     # Value Opportunity Index (Hidden Gems) — analytical overlay, not Living Score.
     from .value_opportunity import compute_value_opportunity
@@ -512,6 +515,9 @@ def export(ctx: CityContext, df: gpd.GeoDataFrame) -> None:
             "noise_source", "noise_confidence",
             "s_rent_relative_city", "s_rent_absolute", "s_rent_strict", "s_rent_kalt_benchmark", "s_rent_value",
             "s_rent_warm", "s_rent_warm_strict", "rent_monthly_est",
+            "s_housing_affordability", "s_objective",
+            "s_daily_life_city", "s_walk_city", "s_transit_city", "s_green_city", "s_quiet_city",
+            "walking_quality_raw", "transit_service_raw", "green_raw", "daily_life_raw",
             "data_quality",
         ):
             if optional in df.columns and pd.notna(r.get(optional)):
@@ -593,20 +599,23 @@ def export(ctx: CityContext, df: gpd.GeoDataFrame) -> None:
             "default_weights": config.DEFAULT_WEIGHTS,
             "living_score_weights": {
                 k: v for k, v in config.LIVING_SCORE_WEIGHTS.items()
-                if k in ("daily_life", "walk", "green", "transit", "centrality", "quiet", "housing_value")
+                if k in (
+                    "daily_life", "walk", "green", "transit", "quiet", "housing_affordability",
+                )
             },
             "daily_life_group_weights": config.DAILY_LIFE_GROUP_WEIGHTS,
             "metric_types": METRIC_TYPES,
             "metric_quality": METRIC_META,
             "pipeline_version": config.PIPELINE_SCHEMA_VERSION,
+            "score_method_version": getattr(config, "SCORE_METHOD_VERSION", "objective-v2"),
             "product": "15-minute-living-score",
             "population": ctx.population,
             "city_type": ctx.city_type,
-            "normalization": "city_context_v1",
+            "normalization": "absolute_objective_v2",
             "city_context": ctx.city_context or {
                 "population": ctx.population,
                 "city_type": ctx.city_type,
-                "normalization": "city_context_v1",
+                "normalization": "absolute_objective_v2",
             },
             "heat_enabled": bool(
                 "s_heat" in df.columns and (df["s_heat"].max() - df["s_heat"].min()) >= 1.0

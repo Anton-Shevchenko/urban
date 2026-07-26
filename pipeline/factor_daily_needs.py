@@ -24,6 +24,7 @@ from .common import (
 from .osm_data import load_daily_needs
 from .score_scales import (
     daily_life_from_groups,
+    daily_life_group_from_categories,
     daily_needs_distance_score,
     daily_needs_final,
     daily_needs_log_score,
@@ -39,6 +40,7 @@ CLUSTER_MAX_MIN = config.DAILY_NEEDS_CLUSTER_MAX_MIN
 CLUSTER_SPAN_M = config.DAILY_NEEDS_CLUSTER_SPAN_M
 LIFE_GROUPS = config.DAILY_LIFE_AMENITIES
 GROUP_WEIGHTS = config.DAILY_LIFE_GROUP_WEIGHTS
+CATEGORY_WEIGHTS = config.DAILY_LIFE_CATEGORY_WEIGHTS
 DECAYS = config.WALK_DECAY_MINUTES
 PLATEAU = config.WALK_DECAY_PLATEAU_MIN
 USE_BAND = config.WALK_USE_BAND_SCORE
@@ -190,18 +192,34 @@ def compute(ctx: CityContext) -> gpd.GeoDataFrame:
         out[col_min] = np.where(np.isfinite(walk), walk, 99.0).round(1)
         out[col_avail] = avail.round(1).values
 
+    # Weighted category aggregation inside each group (not max).
+    # categoryScore ≈ 0.75×nearestAvail + 0.25×choice when count≥2 bonus already in avail.
     group_scores: dict[str, pd.Series] = {}
+    cat_series = {
+        cat: pd.Series(avail_arr[:, j], index=out.index)
+        for j, cat in enumerate(CATEGORIES)
+    }
     for group in GROUP_WEIGHTS:
-        amenity_idxs = [j for j, c in enumerate(CATEGORIES) if LIFE_GROUPS.get(c) == group]
-        if not amenity_idxs:
-            group_scores[group] = pd.Series(0.0, index=out.index)
-            out[f"dl_{group}"] = 0.0
+        cat_w = CATEGORY_WEIGHTS.get(group) or {
+            c: 1.0 for c in CATEGORIES if LIFE_GROUPS.get(c) == group
+        }
+        if not cat_w:
+            group_scores[group] = pd.Series(np.nan, index=out.index)
+            out[f"dl_{group}"] = np.nan
             continue
-        group_max = avail_arr[:, amenity_idxs].max(axis=1)
-        group_scores[group] = pd.Series(group_max, index=out.index)
-        out[f"dl_{group}"] = np.round(group_max, 1)
+        # Blend nearest accessibility with choice (count bonus already applied).
+        blended: dict[str, pd.Series] = {}
+        for cat in cat_w:
+            if cat not in cat_series:
+                continue
+            nearest = cat_series[cat]
+            # Without a separate choice field, use avail as nearest; coverage reduced in frontend.
+            blended[cat] = nearest
+        scored = daily_life_group_from_categories(blended, cat_w)
+        group_scores[group] = scored
+        out[f"dl_{group}"] = scored.values
 
-    # Raw daily life (city normalization applied in normalize_export).
+    # Absolute daily life raw (objective-v2 — not city-rank).
     daily_raw = daily_life_from_groups(group_scores, GROUP_WEIGHTS)
     out["daily_life_raw"] = daily_raw.values
     out["s_daily_life"] = daily_raw.values

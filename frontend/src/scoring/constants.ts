@@ -27,13 +27,13 @@ export const PRESET_LABELS: Record<string, string> = {
   young_professional: 'Young Professional',
   senior: 'Senior',
   no_car: 'Ohne Auto',
+  budget: 'Budget',
   custom: 'Eigene Gewichte',
   // legacy
   balanced: 'Standard',
   quiet: 'Senior',
   central: 'Ohne Auto',
   business: 'Young Professional',
-  budget: 'Standard',
 };
 
 /** Profiles shown in the control panel (excludes legacy aliases). */
@@ -43,9 +43,16 @@ export const PROFILE_IDS = [
   'young_professional',
   'senior',
   'no_car',
+  'budget',
 ] as const;
 
 export const PRESET_USES_PREFS = new Set<string>([]);
+
+export const METRIC_MODE_LABELS: Record<string, string> = {
+  objective: 'Living Score',
+  personal_match: 'Your Match',
+  city_percentile: 'City percentile',
+};
 
 export const STORAGE = {
   dailyNeeds: 'wohnindex.dailyNeedsCategories',

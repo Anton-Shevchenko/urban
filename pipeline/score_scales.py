@@ -276,18 +276,48 @@ def daily_needs_final(coverage_score: pd.Series, distance_score: pd.Series) -> p
 
 
 def daily_life_from_groups(group_scores: dict[str, pd.Series], weights: dict[str, float]) -> pd.Series:
-    """Weighted daily-life from amenity groups (max amenity score per group)."""
-    total_w = sum(weights.values()) or 1.0
+    """Weighted daily-life from amenity groups (known groups only; NaN stays missing)."""
     acc = None
+    weight_series = None
     for key, w in weights.items():
         part = group_scores.get(key)
         if part is None:
             continue
-        term = part.astype(float).fillna(0) * (w / total_w)
-        acc = term if acc is None else acc + term
-    if acc is None:
+        ww = float(w)
+        if ww <= 0:
+            continue
+        known = part.astype(float)
+        term = known * ww
+        mask_w = known.notna().astype(float) * ww
+        acc = term if acc is None else acc.add(term, fill_value=0)
+        weight_series = mask_w if weight_series is None else weight_series.add(mask_w, fill_value=0)
+    if acc is None or weight_series is None:
         return pd.Series(dtype=float)
-    return acc.clip(0, 100).round(1)
+    return (acc / weight_series.replace(0, np.nan)).clip(0, 100).round(1)
+
+
+def daily_life_group_from_categories(
+    category_scores: dict[str, pd.Series],
+    category_weights: dict[str, float],
+) -> pd.Series:
+    """Weighted category aggregation inside one daily-life group (not max)."""
+    acc = None
+    weight_series = None
+    for cat, w in category_weights.items():
+        part = category_scores.get(cat)
+        if part is None:
+            continue
+        ww = float(w)
+        if ww <= 0:
+            continue
+        known = part.astype(float)
+        term = known * ww
+        mask_w = known.notna().astype(float) * ww
+        acc = term if acc is None else acc.add(term, fill_value=0)
+        weight_series = mask_w if weight_series is None else weight_series.add(mask_w, fill_value=0)
+    if acc is None or weight_series is None:
+        return pd.Series(dtype=float)
+    return (acc / weight_series.replace(0, np.nan)).clip(0, 100).round(1)
 
 
 def city_normalize(
@@ -344,10 +374,10 @@ def living_score_composite(
     transit: pd.Series | None = None,
     urban_form: pd.Series | None = None,
 ) -> pd.Series:
-    """7-metric Living Score (foundation rewrite).
+    """Objective Living Score (objective-v2).
 
-    Legacy kwargs (daily_life/walking/transit/urban_form) still accepted for
-    older callers — mapped into the new weight set when ``metrics`` is omitted.
+    Weighted mean of known pillars only — no fillna(50), no city contrast stretch.
+    Missing pillars are omitted and weights renormalised per row.
     """
     from . import config
 
@@ -362,20 +392,30 @@ def living_score_composite(
         if transit is not None:
             metrics["transit"] = transit
         if urban_form is not None:
-            # Legacy: fold urban_form into centrality proxy weight if needed.
             metrics["centrality"] = urban_form
 
-    keys = ["daily_life", "walk", "green", "transit", "centrality", "quiet", "housing_value"]
-    # Alias resolution
+    keys = ["daily_life", "walk", "green", "transit", "quiet", "housing_affordability"]
     alias = {
         "walk": ("walk", "walking_quality"),
-        "centrality": ("centrality", "center", "s_center"),
         "quiet": ("quiet", "noise"),
-        "housing_value": ("housing_value", "price"),
+        "housing_affordability": ("housing_affordability", "housing_value", "price"),
     }
-    total_w = 0.0
-    acc = None
     index = None
+    for key in keys:
+        series = metrics.get(key)
+        if series is None:
+            for alt in alias.get(key, ()):
+                if alt in metrics:
+                    series = metrics[alt]
+                    break
+        if series is not None:
+            index = series.index
+            break
+    if index is None:
+        return pd.Series(dtype=float)
+
+    acc = pd.Series(0.0, index=index)
+    weight_sum = pd.Series(0.0, index=index)
     for key in keys:
         series = metrics.get(key)
         if series is None:
@@ -385,36 +425,35 @@ def living_score_composite(
                     break
         if series is None:
             continue
-        ww = float(w.get(key, 0) or w.get("walking_quality" if key == "walk" else key, 0) or 0)
+        ww = float(w.get(key, 0) or 0)
         if ww <= 0:
             continue
-        total_w += ww
-        term = series.astype(float).fillna(50) * ww
-        acc = term if acc is None else acc + term
-        index = series.index
-    if acc is None or total_w <= 0:
-        return pd.Series(50.0, index=index if index is not None else None)
-    raw = (acc / total_w).astype(float)
-    # Mild contrast expand so composites keep map discrimination after averaging
-    # correlated pillars (target München p90−p10 ≥ 40, mean in mid-50s band).
-    mu = float(raw.mean()) if len(raw) else 50.0
-    stretched = (mu + (raw - mu) * 1.22 + 1.0).clip(0, 100)
-    return stretched.round(1)
+        s = series.astype(float)
+        known = s.notna()
+        acc = acc + s.fillna(0) * ww * known.astype(float)
+        weight_sum = weight_sum + known.astype(float) * ww
+
+    out = (acc / weight_sum.replace(0, np.nan)).clip(0, 100)
+    return out.round(1)
+
+
+def housing_affordability_score(rent_eur_m2: pd.Series) -> pd.Series:
+    """Absolute cold-rent affordability for Objective Score (no access blend)."""
+    return rent_kalt_lenient(rent_eur_m2)
 
 
 def housing_value_score(
     affordability: pd.Series,
-    daily_life: pd.Series,
-    transit: pd.Series,
-    walk: pd.Series,
+    daily_life: pd.Series | None = None,
+    transit: pd.Series | None = None,
+    walk: pd.Series | None = None,
 ) -> pd.Series:
-    """Quality of life per euro — cheap alone is not enough."""
-    access = 0.5 * transit.astype(float) + 0.5 * walk.astype(float)
-    return (
-        0.50 * affordability.astype(float)
-        + 0.25 * daily_life.astype(float)
-        + 0.25 * access
-    ).clip(0, 100).round(1)
+    """Deprecated: use housing_affordability_score.
+
+    Kept for callers; ignores daily_life/transit/walk to avoid double-counting.
+    """
+    del daily_life, transit, walk
+    return affordability.astype(float).clip(0, 100).round(1)
 
 
 def centrality_index(

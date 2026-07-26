@@ -1,4 +1,5 @@
 export * from './formulas';
+export type * from './types';
 export {
   IMPORTANCE_LABELS,
   IMPORTANCE_TO_QUANTILE,

@@ -189,7 +189,11 @@ export function useWohnIndex(options: UseWohnIndexOptions = {}) {
     {},
   );
   const [comparison, setComparison] = useState<CompareItem[]>(() => loadJson(STORAGE.compare, []));
-  const [mapView, setMapViewState] = useState(() => localStorage.getItem(STORAGE.mapView) || 'comfort');
+  const [mapView, setMapViewState] = useState(() => {
+    const stored = localStorage.getItem(STORAGE.mapView);
+    if (!stored || stored === 'comfort' || stored === 'living') return 'objective';
+    return stored;
+  });
   const [showHiddenGems, setShowHiddenGemsState] = useState(() => {
     try {
       return localStorage.getItem(STORAGE.showHiddenGems) === '1';
@@ -213,6 +217,13 @@ export function useWohnIndex(options: UseWohnIndexOptions = {}) {
   const [pickDestinationMode, setPickDestinationMode] = useState(false);
   const [paintVersion, setPaintVersion] = useState(0);
   const [paintStats, setPaintStats] = useState<PaintStats | null>(null);
+
+  // Never leave the paint overlay stuck if MapLibre idle never fires.
+  useEffect(() => {
+    if (!painting) return;
+    const t = setTimeout(() => setPainting(false), 8000);
+    return () => clearTimeout(t);
+  }, [painting]);
   const [debugMode] = useState(readDebugFlag);
   const rentRange = useRef({ min: 0, max: 1 });
   const commitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -290,9 +301,10 @@ export function useWohnIndex(options: UseWohnIndexOptions = {}) {
   const setPillarWeightPercent = useCallback(
     (key: string, percent: number) => {
       const pillarKeys = [
-        'daily_life', 'walk', 'green', 'transit', 'centrality', 'quiet', 'housing_value',
+        'daily_life', 'walk', 'green', 'transit', 'centrality', 'quiet', 'housing_affordability',
       ] as const;
-      if (!(pillarKeys as readonly string[]).includes(key)) return;
+      const resolvedKey = key === 'housing_value' ? 'housing_affordability' : key;
+      if (!(pillarKeys as readonly string[]).includes(resolvedKey)) return;
       const target = Math.max(0, Math.min(100, percent)) / 100;
       setActiveProfile('custom');
       try {
@@ -302,28 +314,29 @@ export function useWohnIndex(options: UseWohnIndexOptions = {}) {
         const cur: Record<string, number> = {};
         let sumOthers = 0;
         pillarKeys.forEach((k) => {
-          const v = Number(prev[k]);
+          const legacy = k === 'housing_affordability'
+            ? Number(prev.housing_affordability ?? prev.housing_value)
+            : Number(prev[k]);
           // Allow explicit 0 — only fall back when the key was never set.
-          cur[k] = Number.isFinite(v) && v >= 0 ? v : (LIVING_WEIGHTS[k] ?? 0);
-          if (k !== key) sumOthers += cur[k];
+          cur[k] = Number.isFinite(legacy) && legacy >= 0 ? legacy : (LIVING_WEIGHTS[k] ?? 0);
+          if (k !== resolvedKey) sumOthers += cur[k];
         });
         const rest = Math.max(0, 1 - target);
-        const next = { ...prev, [key]: target };
+        const next = { ...prev, [resolvedKey]: target };
         pillarKeys.forEach((k) => {
-          if (k === key) return;
+          if (k === resolvedKey) return;
           if (sumOthers > 1e-9) {
             next[k] = (cur[k] / sumOthers) * rest;
           } else {
-            // All others were 0 — put remaining mass on the first other key.
             next[k] = 0;
           }
         });
         if (sumOthers <= 1e-9 && rest > 0) {
-          const fallback = pillarKeys.find((k) => k !== key) || 'daily_life';
+          const fallback = pillarKeys.find((k) => k !== resolvedKey) || 'daily_life';
           next[fallback] = rest;
         }
-        // Raising Wohnwert manually → lean harder on pure affordability.
-        if (key === 'housing_value') {
+        // Raising Wohnkosten manually → lean harder on affordability for Your Match.
+        if (resolvedKey === 'housing_affordability') {
           next.affordability_focus = target >= 0.2
             ? Math.min(0.85, 0.25 + (target - 0.1) * 1.5)
             : Number(prev.affordability_focus) || 0;
@@ -441,12 +454,16 @@ export function useWohnIndex(options: UseWohnIndexOptions = {}) {
         nextWeights[k] = (preset as Record<string, number>)[k] ?? 0;
       });
       (
-        ['daily_life', 'walk', 'green', 'transit', 'centrality', 'quiet', 'housing_value'] as const
+        ['daily_life', 'walk', 'green', 'transit', 'centrality', 'quiet', 'housing_affordability'] as const
       ).forEach((k) => {
-        nextWeights[k] = (preset as Record<string, number>)[k] ?? nextWeights[k] ?? 0;
+        const src = preset as Record<string, number>;
+        nextWeights[k] = src[k]
+          ?? (k === 'housing_affordability' ? src.housing_value : undefined)
+          ?? nextWeights[k]
+          ?? 0;
       });
       (
-        ['dl_food', 'dl_health', 'dl_education', 'dl_services', 'dl_restaurants_cafes', 'dl_other'] as const
+        ['dl_food', 'dl_health', 'dl_education', 'dl_services', 'dl_restaurants_cafes', 'dl_leisure', 'dl_other'] as const
       ).forEach((k) => {
         if ((preset as Record<string, number>)[k] != null) {
           nextWeights[k] = (preset as Record<string, number>)[k];
@@ -456,21 +473,26 @@ export function useWohnIndex(options: UseWohnIndexOptions = {}) {
         nextWeights.affordability_focus = (preset as Record<string, number>).affordability_focus;
       }
       const nextPrefs = {
-        urban_activity: (preset as Record<string, number>).urban_activity ?? 50,
-        density: (preset as Record<string, number>).density ?? 50,
-        housing: (preset as Record<string, number>).housing ?? 30,
+        urban_activity: 50,
+        density: 50,
+        housing: 30,
       };
       const nextPrefInclude = PRESET_USES_PREFS.has(presetId);
       setActiveProfile(presetId);
       setWeightsState(nextWeights);
       setPrefTargetsState(nextPrefs);
       setPrefIncludeState(nextPrefInclude);
-      // Profiles affect Living Score paint — leave diagnose layers.
-      setMapViewState('comfort');
-      setCommittedMapView('comfort');
+      // Profiles affect Your Match only — keep map on current metric mode unless diagnose.
+      const keepMode = mapView === 'personal_match' || mapView === 'city_percentile'
+        || mapView.startsWith('pillar:')
+        || ['daily_life', 'walk', 'green', 'transit', 'centrality', 'quiet', 'housing_affordability', 'housing_value'].includes(mapView)
+        ? mapView
+        : 'objective';
+      setMapViewState(keepMode);
+      setCommittedMapView(keepMode);
       try {
         localStorage.setItem(STORAGE.profile, presetId);
-        localStorage.setItem(STORAGE.mapView, 'comfort');
+        localStorage.setItem(STORAGE.mapView, keepMode);
       } catch { /* */ }
       if (commitTimerRef.current) clearTimeout(commitTimerRef.current);
       setPainting(true);
@@ -483,7 +505,7 @@ export function useWohnIndex(options: UseWohnIndexOptions = {}) {
       // Force map repaint even if React batches weight updates.
       setPaintVersion((v) => v + 1);
     },
-    [],
+    [mapView],
   );
 
   const scoringCtx = useMemo((): ScoringContext => {
@@ -497,22 +519,36 @@ export function useWohnIndex(options: UseWohnIndexOptions = {}) {
     ctx.prefInclude = committedPrefInclude;
     ctx.pillarWeights = {
       daily_life: committedWeights.daily_life ?? 0.2,
-      walk: committedWeights.walk ?? committedWeights.walking_quality ?? 0.2,
+      walk: committedWeights.walk ?? committedWeights.walking_quality ?? 0.15,
       green: committedWeights.green ?? 0.15,
       transit: committedWeights.transit ?? 0.15,
-      centrality: committedWeights.centrality ?? committedWeights.center ?? 0.1,
-      quiet: committedWeights.quiet ?? committedWeights.noise ?? 0.1,
-      housing_value: committedWeights.housing_value ?? committedWeights.price ?? 0.1,
+      centrality: committedWeights.centrality ?? committedWeights.center ?? 0.05,
+      quiet: committedWeights.quiet ?? committedWeights.noise ?? 0.15,
+      housing_affordability:
+        committedWeights.housing_affordability
+        ?? committedWeights.housing_value
+        ?? committedWeights.price
+        ?? 0.15,
     };
     const gm: Record<string, number> = {};
-    ['food', 'health', 'education', 'services', 'restaurants_cafes', 'other'].forEach((g) => {
+    ['food', 'health', 'education', 'services', 'restaurants_cafes', 'leisure', 'other'].forEach((g) => {
       const key = `dl_${g}`;
       if (committedWeights[key] != null) gm[key] = committedWeights[key];
     });
     ctx.groupMultipliers = gm;
     ctx.affordabilityFocus = Number(committedWeights.affordability_focus) || 0;
     ctx.activeProfile = activeProfile;
-    ctx.scoringMode = 'living'; // Match Score deferred until foundation validates
+    ctx.scoringMode = 'living';
+    ctx.mapMetricMode = (
+      !committedMapView || committedMapView === 'comfort' || committedMapView === 'living'
+        ? 'objective'
+        : committedMapView === 'objective'
+          || committedMapView === 'personal_match'
+          || committedMapView === 'city_percentile'
+          || committedMapView.startsWith('pillar:')
+          ? committedMapView
+          : `pillar:${committedMapView === 'housing_value' ? 'housing_affordability' : committedMapView}`
+    ) as ScoringContext['mapMetricMode'];
     ctx.dailyNeedsCategories = { ...committedDailyNeeds };
     ctx.desiredAreaM2 = committedArea;
     ctx.maxMonthlyBudget = committedBudget;
@@ -535,6 +571,7 @@ export function useWohnIndex(options: UseWohnIndexOptions = {}) {
     committedDailyNeeds,
     committedArea,
     committedBudget,
+    committedMapView,
     committedScoringMode,
     committedMatchPrefs,
     activeProfile,
@@ -608,8 +645,12 @@ export function useWohnIndex(options: UseWohnIndexOptions = {}) {
     if (activeProfile === 'custom') {
       const saved = loadJson<Record<string, number> | null>(STORAGE.pillarWeights, null);
       if (saved && typeof saved.daily_life === 'number') {
-        setWeightsState(saved);
-        setCommittedWeights(saved);
+        const migrated = { ...saved };
+        if (migrated.housing_affordability == null && migrated.housing_value != null) {
+          migrated.housing_affordability = migrated.housing_value;
+        }
+        setWeightsState(migrated);
+        setCommittedWeights(migrated);
         setPaintVersion((v) => v + 1);
       } else {
         applyPreset('standard');
@@ -835,9 +876,13 @@ export function useWohnIndex(options: UseWohnIndexOptions = {}) {
 
   const mapViewOptions = useMemo(() => {
     const labels = FACTOR_LABELS as Record<string, string>;
-    const options = [{ value: 'comfort', label: 'Living Score' }];
+    const options = [
+      { value: 'objective', label: 'Living Score' },
+      { value: 'personal_match', label: 'Your Match' },
+      { value: 'city_percentile', label: 'City percentile' },
+    ];
     (
-      ['daily_life', 'walk', 'green', 'transit', 'centrality', 'quiet', 'housing_value'] as const
+      ['daily_life', 'walk', 'green', 'transit', 'centrality', 'quiet', 'housing_affordability'] as const
     ).forEach((k) => {
       options.push({ value: k, label: labels[k] || k });
     });
@@ -885,7 +930,7 @@ export function useWohnIndex(options: UseWohnIndexOptions = {}) {
       if (living != null && Number.isFinite(living)) livingVals.push(living);
       for (const key of PILLAR_KEYS) {
         const v = engine.factorScalar(key, p);
-        if (Number.isFinite(v)) pillarVals[key]!.push(v);
+        if (v != null && Number.isFinite(v)) pillarVals[key]!.push(v);
       }
     }
     const livingDist = summarizeScores('comfort', 'Living Score', livingVals);

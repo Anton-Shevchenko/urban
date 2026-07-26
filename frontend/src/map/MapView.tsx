@@ -4,7 +4,7 @@ import type { Map as MapLibreMap, MapLayerMouseEvent, Marker } from 'maplibre-gl
 import type { Feature, FeatureCollection } from 'geojson';
 import { CFG, NO_CRITERIA_COLOR } from '../scoring/constants';
 import { maplibreStops, cssGradient } from '../scoring/color';
-import { shouldPaintAbsolute } from '../scoring/engine';
+import { FACTOR_LABELS } from '../scoring/engine';
 import { explainLivingScore, pillarBreakdownRows } from '../scoring/explain';
 import { formatVoiTooltipHtml } from '../scoring/valueOpportunity';
 import type { WohnIndexState } from '../hooks/useWohnIndex';
@@ -54,14 +54,47 @@ export function MapView({ state, mapStyleUrl }: Props) {
     const weights = s.engine.getPillarWeights?.();
     const focus =
       (s.engine as { getAffordabilityFocus?: () => number }).getAffordabilityFocus?.() ?? 0;
+    const loc = s.engine.locationScore
+      ? s.engine.locationScore(p)
+      : s.engine.livingScore(p);
     const explained = explainLivingScore(p, weights, focus);
+    const modeRaw = String(s.engine.getMapMetricMode?.() ?? s.paintMapView ?? s.mapView ?? 'objective');
+    const modeLabel =
+      modeRaw === 'objective' || modeRaw === 'comfort' || modeRaw === 'living'
+        ? 'Living Score'
+        : modeRaw === 'personal_match'
+          ? 'Your Match'
+          : modeRaw === 'city_percentile'
+            ? 'City percentile'
+            : (FACTOR_LABELS[modeRaw.replace(/^pillar:/, '')] || modeRaw);
+
+    if (loc.objectiveScore == null && (modeRaw === 'objective' || modeRaw === 'comfort' || modeRaw === 'living')) {
+      setTooltip({
+        x: e.point.x + 14,
+        y: e.point.y + 14,
+        html:
+          `<div class="tt-score"><div class="tt-pass"><b>Insufficient data</b></div>`
+          + `<div class="tt-fail-msg">Data confidence: ${Math.round((loc.confidence ?? 0) * 100)}%`
+          + (loc.missingData?.length ? ` · missing: ${loc.missingData.slice(0, 4).join(', ')}` : '')
+          + `</div></div>`,
+      });
+      return;
+    }
+
     const rows = pillarBreakdownRows(explained.pillars)
       .map((row) => {
         const bar = '█'.repeat(Math.round(row.score / 10)) + '░'.repeat(10 - Math.round(row.score / 10));
         return `<tr><td>${row.label}</td><td class="tt-bar">${bar}</td><td>${row.score}</td></tr>`;
       })
       .join('');
-    const statusLine = `<div class="tt-pass"><b>${explained.score}/100</b> Living Score</div><div class="tt-fail-msg">${explained.text}</div>`;
+    const obj = loc.objectiveScore != null ? Math.round(loc.objectiveScore) : '—';
+    const match = loc.personalMatchScore != null ? Math.round(loc.personalMatchScore) : '—';
+    const pct = loc.cityPercentile != null ? Math.round(loc.cityPercentile) : '—';
+    const conf = Math.round((loc.confidence ?? 0) * 100);
+    const statusLine =
+      `<div class="tt-pass"><b>${obj}/100</b> Living Score · mode: ${modeLabel}</div>`
+      + `<div class="tt-fail-msg">Your Match: ${match}/100 · City percentile: ${pct} · Data confidence: ${conf}%</div>`
+      + `<div class="tt-fail-msg">${explained.text}</div>`;
     const voiHtml = s.showHiddenGems ? (formatVoiTooltipHtml(p) || '') : '';
     setTooltip({
       x: e.point.x + 14,
@@ -161,6 +194,12 @@ export function MapView({ state, mapStyleUrl }: Props) {
         const engine = s.engine;
         const paintMapView = s.paintMapView ?? s.mapView;
         const t0 = performance.now();
+        let finished = false;
+        const finishEarly = () => {
+          if (finished) return;
+          finished = true;
+          s.setPainting(false);
+        };
 
         let fc = liveFcRef.current;
         if (!fc || fc.features.length !== s.features.length) {
@@ -175,53 +214,46 @@ export function MapView({ state, mapStyleUrl }: Props) {
           liveFcRef.current = fc;
         }
 
-        const absByIndex: (number | null)[] = new Array(fc.features.length).fill(null);
-        const comfortVals: number[] = [];
-        const isLivingPaint = !paintMapView || paintMapView === 'comfort';
+        const isPrimaryPaint = !paintMapView
+          || paintMapView === 'comfort'
+          || paintMapView === 'living'
+          || paintMapView === 'objective'
+          || paintMapView === 'personal_match'
+          || paintMapView === 'city_percentile';
 
+        try {
         for (let i = 0; i < fc.features.length; i++) {
           const props = fc.features[i].properties as Record<string, unknown>;
-          const src = s.features[i]?.properties as Record<string, unknown> | undefined;
-          if (src) {
-            for (const k of Object.keys(src)) {
-              if (
-                k === '_comfort_live'
-                || k === '_hex_passed'
-                || k === '_comfort_abs'
-                || k === '_voi_on'
-                || k === '_voi_level'
-                || k === '_voi_width'
-              ) continue;
-              props[k] = src[k];
-            }
-          }
-          const ev = engine.evaluateHex(props);
+          // Score against source feature props (full pipeline fields).
+          const src = (s.features[i]?.properties ?? props) as Record<string, unknown>;
           let c: number | null;
-          if (!isLivingPaint) {
-            c = engine.factorScalar(paintMapView, props);
+          if (!isPrimaryPaint) {
+            const pillarKey = paintMapView === 'housing_value' ? 'housing_affordability' : paintMapView;
+            c = engine.factorScalar(pillarKey, src);
           } else {
-            c = engine.comfortScalar(props);
+            c = engine.comfortScalar(src);
           }
-          props._hex_passed = ev.passed ? 1 : 0;
-          const voiLevel = Number(props.voi_highlight);
+          // Budget dimming already applied in comfortScalar.
+          props._hex_passed = c == null ? 0 : 1;
+          props.data_quality = src.data_quality;
+          const voiLevel = Number(src.voi_highlight);
           if (voiLevel === 1 || voiLevel === 2 || voiLevel === 3) {
             props._voi_level = voiLevel;
             props._voi_on = 1;
-          } else if (props.voi_class === 'hidden_gem') {
+          } else if (src.voi_class === 'hidden_gem') {
             props._voi_level = 2;
             props._voi_on = 1;
-          } else if (props.voi_class === 'good_value') {
+          } else if (src.voi_class === 'good_value') {
             props._voi_level = 1;
             props._voi_on = 1;
-          } else if (props.voi_class === 'overpriced') {
+          } else if (src.voi_class === 'overpriced') {
             props._voi_level = 3;
             props._voi_on = 1;
           } else {
             props._voi_level = 0;
             props._voi_on = 0;
           }
-          // Border thickness from gem_strength (v1.2); overpriced uses fixed width.
-          const strength = Number(props.voi_gem_strength);
+          const strength = Number(src.voi_gem_strength);
           if (props._voi_level === 3) {
             props._voi_width = 2.4;
           } else if (props._voi_on === 1 && Number.isFinite(strength)) {
@@ -235,40 +267,12 @@ export function MapView({ state, mapStyleUrl }: Props) {
           }
           if (c != null && Number.isFinite(c)) {
             const abs = Math.round(c * 10) / 10;
-            absByIndex[i] = abs;
             props._comfort_abs = abs;
-            comfortVals.push(abs);
+            props._comfort_live = abs;
           } else {
             delete props._comfort_live;
             delete props._comfort_abs;
           }
-        }
-
-        // Living Score: paint by within-city rank so balanced presets reorder colours.
-        // When one pillar dominates (≥50%), paint absolute 0–100 instead.
-        // Tooltip always uses absolute `_comfort_abs`. Diagnose views stay absolute.
-        const paintAbs =
-          !isLivingPaint
-          || comfortVals.length < 2
-          || shouldPaintAbsolute(engine.getPillarWeights?.() ?? {});
-        comfortVals.sort((a, b) => a - b);
-        for (let i = 0; i < fc.features.length; i++) {
-          const props = fc.features[i].properties as Record<string, unknown>;
-          const abs = absByIndex[i];
-          if (abs == null) continue;
-          if (paintAbs) {
-            props._comfort_live = abs;
-            continue;
-          }
-          let loR = 0;
-          let hiR = comfortVals.length;
-          while (loR < hiR) {
-            const mid = (loR + hiR) >> 1;
-            if (comfortVals[mid] <= abs) loR = mid + 1;
-            else hiR = mid;
-          }
-          const rank = ((loR - 1) / (comfortVals.length - 1)) * 100;
-          props._comfort_live = Math.round(rank * 10) / 10;
         }
 
         const lo = 0;
@@ -278,17 +282,22 @@ export function MapView({ state, mapStyleUrl }: Props) {
         const passingCount = engine.getPassingCount();
 
         let fillColor: unknown = NO_CRITERIA_COLOR;
-        if (activeKeys.length || (paintMapView && paintMapView !== 'comfort')) {
+        if (activeKeys.length || isPrimaryPaint || (paintMapView && paintMapView !== 'comfort')) {
           fillColor = [
-            'interpolate',
-            ['linear'],
-            ['coalesce', ['get', '_comfort_live'], 50],
-            ...maplibreStops(lo, hi),
+            'case',
+            ['==', ['typeof', ['get', '_comfort_live']], 'number'],
+            [
+              'interpolate',
+              ['linear'],
+              ['get', '_comfort_live'],
+              ...maplibreStops(lo, hi),
+            ],
+            NO_CRITERIA_COLOR,
           ];
         }
 
         const fillOpacity =
-          passingCount > 0 && (!paintMapView || paintMapView === 'comfort')
+          passingCount > 0 && isPrimaryPaint
             ? [
                 'case',
                 ['==', ['get', '_hex_passed'], 1],
@@ -322,6 +331,7 @@ export function MapView({ state, mapStyleUrl }: Props) {
           if (seq !== paintSeqRef.current) return;
           if ((finish as { done?: boolean }).done) return;
           (finish as { done?: boolean }).done = true;
+          finished = true;
           const ms = Math.round(performance.now() - t0);
           s.onPaintComplete({
             ms,
@@ -420,17 +430,20 @@ export function MapView({ state, mapStyleUrl }: Props) {
           map.setFilter(SELECT_ID, ['in', ['get', 'h3'], ['literal', selected]]);
         }
 
-        // Wait for MapLibre to finish rendering before clearing loader
+        // Clear loader promptly — idle can stall on large GeoJSON uploads.
         const onIdle = () => {
           map.off('idle', onIdle);
           finish();
         };
         map.once('idle', onIdle);
-        // Safety timeout if idle never fires
         setTimeout(() => {
           map.off('idle', onIdle);
           finish();
-        }, 2500);
+        }, 600);
+        } catch (err) {
+          console.error('[map paint]', err);
+          finishEarly();
+        }
       };
 
       if (map.isStyleLoaded()) run();

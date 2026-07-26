@@ -1,8 +1,9 @@
 /**
- * German narrative explanations for the 15-Minute Living Score (7 metrics).
+ * German narrative explanations for the Objective Living Score.
  */
 
 import { LIVING_WEIGHTS, PILLAR_LABELS, livingScore } from './engine';
+import { num } from './num';
 
 const PILLAR_WEAKNESS: Record<string, string> = {
   daily_life: 'Alltagsversorgung (Läden, Ärzte, Schulen)',
@@ -11,7 +12,8 @@ const PILLAR_WEAKNESS: Record<string, string> = {
   transit: 'ÖPNV-Anbindung',
   centrality: 'Lage zu Aktivitätszentren',
   quiet: 'Lärmbelastung',
-  housing_value: 'Mietpreis / Preis-Leistung',
+  housing_affordability: 'Wohnkosten (absolut)',
+  housing_value: 'Wohnkosten (absolut)',
 };
 
 const PILLAR_STRENGTH: Record<string, string> = {
@@ -21,7 +23,8 @@ const PILLAR_STRENGTH: Record<string, string> = {
   transit: 'starke ÖPNV-Anbindung',
   centrality: 'zentrale Lage zu Aktivitätszentren',
   quiet: 'ruhige Umgebung',
-  housing_value: 'gutes Preis-Leistungs-Verhältnis',
+  housing_affordability: 'günstigere absolute Wohnkosten',
+  housing_value: 'günstigere absolute Wohnkosten',
 };
 
 function minutesLabel(m: number | null | undefined): string | null {
@@ -35,7 +38,8 @@ function minutesLabel(m: number | null | undefined): string | null {
   return `${Math.round(v)}`;
 }
 
-function headline(score: number): string {
+function headline(score: number | null): string {
+  if (score == null) return 'Unzureichende Daten für den Living Score.';
   if (score >= 90) return 'Hervorragend ohne Auto.';
   if (score >= 80) return 'Sehr gut ohne Auto.';
   if (score >= 70) return 'Gut geeignet für ein Leben ohne Auto.';
@@ -48,30 +52,46 @@ export function explainLivingScore(
   p: Record<string, unknown>,
   pillarWeights?: Record<string, number>,
   affordabilityFocus = 0,
-): { score: number; text: string; pillars: Record<string, number> } {
-  const { score, pillars } = livingScore(
+  groupMultipliers: Record<string, number> | null = null,
+): {
+  score: number | null;
+  text: string;
+  pillars: Record<string, number>;
+  personalMatchScore: number | null;
+  cityPercentile: number | null;
+  confidence: number;
+} {
+  const loc = livingScore(
     p,
     pillarWeights as typeof LIVING_WEIGHTS | undefined,
-    null,
+    groupMultipliers,
     affordabilityFocus,
   );
-  const rounded = Math.round(score);
+  const score = loc.objectiveScore;
+  const rounded = score != null ? Math.round(score) : null;
+
+  // Only known pillars for narrative (skip nulls).
+  const pillarsKnown: Record<string, number> = {};
+  for (const [k, v] of Object.entries(loc.pillars)) {
+    if (v != null && Number.isFinite(v)) pillarsKnown[k] = v;
+  }
 
   const amenityBits: string[] = [];
-  const supermarket = minutesLabel(p.dn_supermarket_min as number);
-  const pharmacy = minutesLabel(p.dn_pharmacy_min as number);
+  const supermarket = minutesLabel(num(p.dn_supermarket_min) ?? undefined);
+  const pharmacy = minutesLabel(num(p.dn_pharmacy_min) ?? undefined);
   if (supermarket) amenityBits.push(`Supermarkt in ${supermarket} Gehminuten`);
   if (pharmacy) amenityBits.push(`Apotheke in ${pharmacy}`);
-  if (pillars.transit >= 75) amenityBits.push('guter ÖPNV');
-  else if (pillars.transit >= 55) amenityBits.push('ÖPNV in der Nähe');
+  const transit = pillarsKnown.transit;
+  if (transit != null && transit >= 75) amenityBits.push('guter ÖPNV');
+  else if (transit != null && transit >= 55) amenityBits.push('ÖPNV in der Nähe');
 
-  const rent = Number(p.rent_eur_m2);
-  const rel = Number(p.s_rent_relative_city);
-  if (Number.isFinite(rent) && Number.isFinite(rel) && rel < 20 && affordabilityFocus >= 0.45) {
+  const rent = num(p.rent_eur_m2);
+  const rel = num(p.s_rent_relative_city);
+  if (rent != null && rel != null && rel < 20 && affordabilityFocus > 0.3) {
     amenityBits.push(`teuer (~${rent.toFixed(0)} €/m²)`);
   }
 
-  const sorted = Object.entries(pillars).sort((a, b) => a[1] - b[1]);
+  const sorted = Object.entries(pillarsKnown).sort((a, b) => a[1] - b[1]);
   const weakest = sorted[0];
   const strongest = sorted[sorted.length - 1];
 
@@ -92,18 +112,26 @@ export function explainLivingScore(
     parts.push(`${strength.charAt(0).toUpperCase()}${strength.slice(1)}.`);
   }
   if (weakness) parts.push(weakness);
+  if (loc.confidence < 0.6) {
+    parts.push(`Datenvertrauen: ${Math.round(loc.confidence * 100)}%.`);
+  }
 
   return {
     score: rounded,
     text: parts.join(' '),
-    pillars,
+    pillars: pillarsKnown,
+    personalMatchScore: loc.personalMatchScore,
+    cityPercentile: loc.cityPercentile,
+    confidence: loc.confidence,
   };
 }
 
-export function pillarBreakdownRows(pillars: Record<string, number>) {
-  return Object.entries(pillars).map(([key, score]) => ({
-    key,
-    label: PILLAR_LABELS[key as keyof typeof PILLAR_LABELS] || key,
-    score: Math.round(score),
-  }));
+export function pillarBreakdownRows(pillars: Record<string, number | null | undefined>) {
+  return Object.entries(pillars)
+    .filter(([, score]) => score != null && Number.isFinite(score))
+    .map(([key, score]) => ({
+      key,
+      label: PILLAR_LABELS[key] || key,
+      score: Math.round(score as number),
+    }));
 }

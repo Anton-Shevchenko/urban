@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import type { CSSProperties, FormEvent } from 'react';
-import { PRESET_LABELS, PROFILE_IDS } from '../scoring/constants';
-import { LIVING_WEIGHTS, PILLAR_KEYS, PILLAR_LABELS, shouldPaintAbsolute } from '../scoring/engine';
+import { METRIC_MODE_LABELS, PRESET_LABELS, PROFILE_IDS } from '../scoring/constants';
+import { LIVING_WEIGHTS, PILLAR_KEYS, PILLAR_LABELS } from '../scoring/engine';
 import type { WohnIndexState } from '../hooks/useWohnIndex';
 
 type Props = {
@@ -65,16 +65,20 @@ export function ControlPanel({ state, onClose }: Props) {
   }, [weights]);
 
   const legendNote = useMemo(() => {
-    if (mapView && mapView !== 'comfort') {
-      const label = state.FACTOR_LABELS[mapView] ?? mapView;
-      return `Diagnose: ${label} (0–100)`;
+    if (mapView === 'personal_match') {
+      const profileLabel = PRESET_LABELS[activeProfile] || activeProfile;
+      return `Your Match · Profil „${profileLabel}“ · absolute 0–100 · ändert nicht den Living Score`;
     }
-    const profileLabel = PRESET_LABELS[activeProfile] || activeProfile;
-    if (shouldPaintAbsolute(pillarWeights)) {
-      return `Living Score · „${profileLabel}“ · Farbe = Absolutwert (Fokus-Metrik)`;
+    if (mapView === 'city_percentile') {
+      return 'City percentile · Anteil besserer Punkte in dieser Stadt (nicht absolute Qualität)';
     }
-    return `Living Score · „${profileLabel}“ · Farbe = Rang in der Stadt · Tooltip = Absolutwert`;
-  }, [mapView, state.FACTOR_LABELS, state.paintVersion, activeProfile, pillarWeights]);
+    if (mapView && mapView !== 'objective' && mapView !== 'comfort' && mapView !== 'living') {
+      const key = mapView.replace(/^pillar:/, '');
+      const label = state.FACTOR_LABELS[key] ?? METRIC_MODE_LABELS[mapView] ?? key;
+      return `${label} · absolute 0–100`;
+    }
+    return 'Living Score · absolute Qualität der Lage · vergleichbar zwischen Städten · 85–100 Excellent · 70–84 Good · 55–69 Average · 40–54 Below average · 0–39 Poor · grau = Insufficient data';
+  }, [mapView, state.FACTOR_LABELS, state.paintVersion, activeProfile]);
 
   const onSearch = (e: FormEvent) => {
     e.preventDefault();
@@ -91,7 +95,7 @@ export function ControlPanel({ state, onClose }: Props) {
         <div className="panel-head-text">
           <h1>{cityName}</h1>
           <p className="subtitle">
-            15-Minuten-Living-Score · ohne Auto leben · 0–100
+            Living Score (objektiv) · Your Match (Profil) · 0–100
             {cityType ? ` · ${cityType}` : ''}
           </p>
         </div>
@@ -135,7 +139,7 @@ export function ControlPanel({ state, onClose }: Props) {
       </section>
 
       <section className="presets">
-        <span className="section-label">Profil</span>
+        <span className="section-label">Your Match · Profil</span>
         <div className="preset-row">
           {PROFILE_IDS.map((id) => (
             <button
@@ -150,17 +154,17 @@ export function ControlPanel({ state, onClose }: Props) {
           ))}
         </div>
         {activeProfile === 'custom' ? (
-          <p className="section-hint">Eigene Gewichte — Profile starten eine Vorlage, Schieberegler passen an.</p>
+          <p className="section-hint">Eigene Gewichte für Your Match — Living Score bleibt unverändert.</p>
         ) : (
           <p className="section-hint">
-            Profile setzen Startgewichte. Darunter kannst du jeden Anteil selbst einstellen.
+            Profile beeinflussen nur Your Match, nicht den objektiven Living Score.
           </p>
         )}
       </section>
 
       <section className="sliders sliders-positive">
-        <span className="section-label">Metrik-Gewichte</span>
-        <p className="section-hint">Summe immer 100% — ein Regler zieht die anderen anteilig nach.</p>
+        <span className="section-label">Your Match · Gewichte</span>
+        <p className="section-hint">Summe immer 100% — steuert Your Match; Karte „Living Score“ bleibt objektiv.</p>
         {PILLAR_KEYS.map((key) => {
           const pct = Math.round((pillarWeights[key] ?? 0) * 100);
           return (
@@ -245,10 +249,20 @@ export function ControlPanel({ state, onClose }: Props) {
       )}
 
       <section className="legend">
-        <span className="section-label">15-Minuten-Living-Score</span>
+        <span className="section-label">
+          {mapView === 'personal_match'
+            ? 'Your Match'
+            : mapView === 'city_percentile'
+              ? 'City percentile'
+              : 'Living Score'}
+        </span>
         <label className="map-view-field">
           <span>Kartenansicht</span>
-          <select value={mapView} onChange={(e) => setMapView(e.target.value)} aria-label="Kartenansicht wählen">
+          <select
+            value={mapView === 'comfort' || mapView === 'living' ? 'objective' : mapView}
+            onChange={(e) => setMapView(e.target.value)}
+            aria-label="Kartenansicht wählen"
+          >
             {mapViewOptions.map((o) => (
               <option key={o.value} value={o.value}>
                 {o.label}
@@ -258,8 +272,8 @@ export function ControlPanel({ state, onClose }: Props) {
         </label>
         <div className="legend-bar" id="legend-bar" />
         <div className="legend-scale">
-          <span>0 autoabhängig</span>
-          <span>100 fußläufig</span>
+          <span>{mapView === 'city_percentile' ? '0 niedriger' : '0 Poor'}</span>
+          <span>{mapView === 'city_percentile' ? '100 höher in Stadt' : '100 Excellent'}</span>
         </div>
         <p className="section-hint legend-note">{legendNote}</p>
       </section>

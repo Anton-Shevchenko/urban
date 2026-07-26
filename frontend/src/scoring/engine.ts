@@ -1,10 +1,10 @@
-// @ts-nocheck
 /**
  * 15-Minute Living Score engine (Germany-first).
- * Primary map colour = 7-metric living score with profile weight overlays.
- * Match mode kept dormant until foundation validates.
  *
- * Core weights & formulas live in ./formulas — tune them there.
+ * Default map colour = objective Living Score (absolute).
+ * Profiles / sliders affect Personal Match only.
+ *
+ * Core weights & formulas: ./formulas, ./objective, ./locationScore.
  */
 
 import {
@@ -20,27 +20,42 @@ import {
   LIVING_WEIGHTS,
   PILLAR_KEYS,
   PRESETS,
+  buildCityObjectiveIndex,
   clamp100,
   extractGroupMultipliers,
   extractPillarWeights,
   livingScore,
+  num,
   pillarScores,
+  resolveCityPercentile,
+  type CityObjectiveIndex,
 } from './formulas';
+import type {
+  HexEval,
+  LocationScoreResult,
+  MapMetricMode,
+  PipelinePoint,
+  ScoringContext,
+  ScoringEngine,
+} from './types';
 
 export {
   AFFORDABILITY_PENALTY_FOCUS,
   ABSOLUTE_PAINT_PILLAR_THRESHOLD,
+  DAILY_LIFE_CATEGORY_WEIGHTS,
   DAILY_LIFE_GROUPS,
   DAILY_LIFE_GROUP_WEIGHTS,
   DAILY_NEED_CATS,
   DAILY_NEEDS_WEIGHTS,
   LIVING_WEIGHTS,
+  OBJECTIVE_PILLAR_KEYS,
+  OBJECTIVE_WEIGHTS,
+  PERSONAL_PILLAR_KEYS,
   PILLAR_KEYS,
   PRESETS,
-  WALK_DECAY,
+  SCORE_METHOD_VERSION,
   WALK_MINUTE_BAND_X,
   WALK_MINUTE_BAND_Y,
-  WALK_PLATEAU,
   clamp100,
   dailyLifeFromGroups,
   deriveUrbanForm,
@@ -50,14 +65,21 @@ export {
   hasCustomGroupMultipliers,
   isUrbanFormBroken,
   livingScore,
+  locationScore,
+  num,
   pillarScores,
   shouldPaintAbsolute,
   walkMinuteBandScore,
   walkMinuteDecayScore,
+  buildCityObjectiveIndex,
+  cityPercentileForScore,
+  computePersonalMatchScore,
+  confidenceLevel,
+  LEGEND_BANDS,
 } from './formulas';
 
 export const IMPORTANCE_LABELS = ['Egal', 'Gering', 'Mittel', 'Wichtig', 'Kritisch'];
-export const IMPORTANCE_TO_QUANTILE = { 1: 0.25, 2: 0.5, 3: 0.75, 4: 0.9 };
+export const IMPORTANCE_TO_QUANTILE: Record<number, number> = { 1: 0.25, 2: 0.5, 3: 0.75, 4: 0.9 };
 export const PREF_IMPORTANCE = 2;
 export const DEFAULT_NEBENKOSTEN_EUR_M2 = 4.0;
 export const PREF_PENALTY = 1.2;
@@ -67,12 +89,13 @@ export const DEFAULT_SIZE_M2 = 60;
 export const IMPORTANCE_KEYS = [
   'center', 'daily_needs', 'transit_service', 'green', 'noise',
   'heat', 'traffic_safety', 'price', 'custom_dest',
-  'daily_life', 'walk', 'walking_quality', 'transit', 'centrality', 'quiet', 'housing_value',
+  'daily_life', 'walk', 'walking_quality', 'transit', 'centrality', 'quiet',
+  'housing_value', 'housing_affordability',
   'urban_form',
 ];
 export const PREF_KEYS = ['urban_activity', 'density', 'housing'];
 
-export const SCORE_PROPS = {
+export const SCORE_PROPS: Record<string, string> = {
   center: 's_center',
   centrality: 's_center',
   daily_needs: 's_daily_needs',
@@ -85,18 +108,22 @@ export const SCORE_PROPS = {
   green: 's_green',
   quiet: 's_quiet',
   noise: 's_noise',
-  housing_value: 's_housing_value',
+  housing_value: 's_rent_kalt_benchmark',
+  housing_affordability: 's_rent_kalt_benchmark',
   heat: 's_heat',
   traffic_safety: 's_traffic_safety',
   urban_activity: 's_urban_activity',
   density: 's_density',
   housing: 's_housing',
   living: 's_living',
-  price: 's_housing_value',
+  price: 's_rent_relative_city',
 };
 
-export const FACTOR_LABELS = {
+export const FACTOR_LABELS: Record<string, string> = {
   living: 'Living Score',
+  objective: 'Living Score',
+  personal_match: 'Your Match',
+  city_percentile: 'City percentile',
   daily_life: 'Alltag',
   walk: 'Gehqualität',
   walking_quality: 'Gehqualität',
@@ -105,11 +132,12 @@ export const FACTOR_LABELS = {
   centrality: 'Zentralität',
   center: 'Zentralität',
   quiet: 'Ruhe',
-  housing_value: 'Wohnwert',
+  housing_value: 'Wohnkosten',
+  housing_affordability: 'Wohnkosten',
   urban_form: 'Stadtform',
   daily_needs: 'Alltag',
   transit_service: 'ÖPNV',
-  price: 'Wohnwert',
+  price: 'Miete (stadtrelativ)',
   noise: 'Ruhe',
   heat: 'Hitze',
   traffic_safety: 'Straßenrisiko',
@@ -119,17 +147,18 @@ export const FACTOR_LABELS = {
   housing: 'Wohnalter',
 };
 
-export const PILLAR_LABELS = {
+export const PILLAR_LABELS: Record<string, string> = {
   daily_life: 'Alltag',
   walk: 'Gehqualität',
   green: 'Grün',
   transit: 'ÖPNV',
   centrality: 'Zentralität',
   quiet: 'Ruhe',
-  housing_value: 'Wohnwert',
+  housing_affordability: 'Wohnkosten',
+  housing_value: 'Wohnkosten',
 };
 
-export function percentile(sorted, p) {
+export function percentile(sorted: number[], p: number): number {
   if (!sorted.length) return 50;
   const idx = (sorted.length - 1) * p;
   const lo = Math.floor(idx);
@@ -138,7 +167,10 @@ export function percentile(sorted, p) {
   return sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo);
 }
 
-export function thresholdForImportance(importance, percentiles) {
+export function thresholdForImportance(
+  importance: number,
+  percentiles: { p25: number; p50: number; p75: number; p90: number } | null,
+): number | null {
   if (!importance) return null;
   const q = IMPORTANCE_TO_QUANTILE[importance];
   if (q == null || !percentiles) return null;
@@ -148,7 +180,7 @@ export function thresholdForImportance(importance, percentiles) {
   return percentiles.p90;
 }
 
-export function computeFactorPercentiles(values) {
+export function computeFactorPercentiles(values: number[]) {
   const sorted = [...values].filter(Number.isFinite).sort((a, b) => a - b);
   if (!sorted.length) {
     return { p25: 25, p50: 50, p75: 75, p90: 90 };
@@ -161,21 +193,16 @@ export function computeFactorPercentiles(values) {
   };
 }
 
-function num(v, fallback = null) {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : fallback;
-}
-
-function estimatedMonthlyRent(p, ctx) {
-  const cold = Number(p.rent_eur_m2);
-  if (!Number.isFinite(cold)) return null;
+function estimatedMonthlyRent(p: PipelinePoint, ctx: ScoringContext): number | null {
+  const cold = num(p.rent_eur_m2);
+  if (cold == null) return null;
   const area = ctx.desiredAreaM2 || DEFAULT_SIZE_M2;
-  const nk = Number(p.nebenkosten_eur_m2);
-  const nkPerM2 = Number.isFinite(nk) ? nk : DEFAULT_NEBENKOSTEN_EUR_M2;
+  const nk = num(p.nebenkosten_eur_m2);
+  const nkPerM2 = nk ?? DEFAULT_NEBENKOSTEN_EUR_M2;
   return (cold + nkPerM2) * area;
 }
 
-function budgetAffordScalar(p, ctx) {
+function budgetAffordScalar(p: PipelinePoint, ctx: ScoringContext): number | null {
   const budget = ctx.maxMonthlyBudget;
   if (!budget || budget <= 0) return null;
   const monthly = estimatedMonthlyRent(p, ctx);
@@ -190,30 +217,63 @@ function budgetAffordScalar(p, ctx) {
   return 0;
 }
 
-export function computeCityFactorStats(features, ctx, factorScalarFn) {
-  const stats = {};
+export function computeCityFactorStats(
+  features: Array<{ properties: PipelinePoint }>,
+  ctx: ScoringContext,
+  factorScalarFn: (key: string, p: PipelinePoint) => number | null,
+) {
+  const stats: Record<string, ReturnType<typeof computeFactorPercentiles>> = {};
   const keys = [...PILLAR_KEYS, ...IMPORTANCE_KEYS, ...PREF_KEYS];
   keys.forEach((key) => {
     const vals = features
       .map((f) => factorScalarFn(key, f.properties))
-      .filter((v) => v != null && Number.isFinite(v));
+      .filter((v): v is number => v != null && Number.isFinite(v));
     stats[key] = computeFactorPercentiles(vals);
   });
+  void ctx;
   return stats;
 }
 
-export function createScoringEngine(ctx, features) {
-  features = features || [];
-  let cityFactorStats = null;
+function parseMapMetricMode(raw: string | null | undefined): MapMetricMode {
+  if (!raw || raw === 'comfort' || raw === 'living') return 'objective';
+  if (raw === 'objective' || raw === 'personal_match' || raw === 'city_percentile') {
+    return raw;
+  }
+  if (raw.startsWith('pillar:')) return raw as MapMetricMode;
+  // Legacy diagnose / factor map views
+  if (PILLAR_KEYS.includes(raw as typeof PILLAR_KEYS[number]) || SCORE_PROPS[raw]) {
+    return `pillar:${raw === 'housing_value' ? 'housing_affordability' : raw}`;
+  }
+  return 'objective';
+}
+
+export function createScoringEngine(
+  ctx: ScoringContext,
+  rawFeatures: Array<{ properties?: PipelinePoint | null }> = [],
+): ScoringEngine {
+  const features = rawFeatures.map((f) => ({
+    properties: (f.properties ?? {}) as PipelinePoint,
+  }));
   let passingCount = 0;
-  let activeProfile = ctx.activeProfile || 'standard';
   let pillarWeights = extractPillarWeights(ctx.pillarWeights || LIVING_WEIGHTS);
   let groupMultipliers = ctx.groupMultipliers || {};
   let affordabilityFocus = Number(ctx.affordabilityFocus) || 0;
   let matchPrefs = normalizeMatchPrefs(ctx.matchPrefs || DEFAULT_MATCH_PREFS);
-  let matchRanking = [];
-  let matchByH3 = new Map();
-  let matchAlternatives = [];
+  let matchRanking: ReturnType<typeof rankMatchHexes> = [];
+  let matchByH3 = new Map<string, (typeof matchRanking)[number]>();
+  let matchAlternatives: ReturnType<typeof computeMatchAlternatives> = [];
+  let cityIndex: CityObjectiveIndex = { byH3: new Map(), sorted: [] };
+  ctx.cityObjectiveByH3 = cityIndex.byH3;
+  ctx.cityObjectiveSorted = cityIndex.sorted;
+  ctx.mapMetricMode = parseMapMetricMode(ctx.mapMetricMode);
+  /** Cache full location results; bump generation when personalization changes. */
+  let locCache = new Map<string, LocationScoreResult>();
+  let locCacheGen = 0;
+
+  function clearLocCache() {
+    locCache = new Map();
+    locCacheGen += 1;
+  }
 
   function rebuildMatchRanking() {
     matchPrefs = normalizeMatchPrefs(ctx.matchPrefs || matchPrefs);
@@ -228,76 +288,87 @@ export function createScoringEngine(ctx, features) {
     matchAlternatives = computeMatchAlternatives(matchRanking, matchPrefs);
   }
 
-  function factorAvailable(key) {
+  function factorAvailable(key: string): boolean {
     if (key === 'price') return ctx.hasRent;
     if (key === 'custom_dest') return (ctx.destinations?.length || 0) > 0;
     if (key === 'heat') return ctx.hasExtendedMetrics && ctx.heatHasVariation;
     if (key === 'noise') return ctx.noiseHasVariation !== false;
-    if (PILLAR_KEYS.includes(key) || key === 'living') return true;
+    if (PILLAR_KEYS.includes(key as typeof PILLAR_KEYS[number]) || key === 'living') return true;
     if (['daily_needs', 'transit_service', 'traffic_safety', 'density', 'housing'].includes(key)) {
       return ctx.hasExtendedMetrics;
     }
     return true;
   }
 
-  function importanceForKey(key) {
-    if (PREF_KEYS.includes(key)) return ctx.prefInclude ? PREF_IMPORTANCE : 0;
-    return ctx.weights[key] ?? 0;
-  }
-
-  function activeImportanceKeys() {
-    // Living-score mode: pillars are always the active breakdown.
+  function activeImportanceKeys(): string[] {
     return PILLAR_KEYS.filter((k) => factorAvailable(k));
   }
 
-  function activePrefKeys() {
-    return [];
-  }
-
-  function activeCriterionKeys() {
+  function activeCriterionKeys(): string[] {
     return activeImportanceKeys();
   }
 
-  function factorScalar(key, p) {
-    if (key === 'living') return livingScore(p, pillarWeights, groupMultipliers, affordabilityFocus).score;
-    if (PILLAR_KEYS.includes(key)) return pillarScores(p, groupMultipliers, affordabilityFocus)[key];
+  function locationFor(p: PipelinePoint): LocationScoreResult {
+    void locCacheGen;
+    const h3 = String(p.h3 ?? p.h3_index ?? '');
+    if (h3 && locCache.has(h3)) return locCache.get(h3)!;
+    const cityPercentile = resolveCityPercentile(p, cityIndex);
+    const loc = livingScore(p, pillarWeights, groupMultipliers, affordabilityFocus, cityPercentile);
+    if (h3) locCache.set(h3, loc);
+    return loc;
+  }
+
+  function factorScalar(key: string, p: PipelinePoint): number | null {
+    if (key === 'living' || key === 'objective') {
+      return locationFor(p).objectiveScore;
+    }
+    if (key === 'personal_match') return locationFor(p).personalMatchScore;
+    if (key === 'city_percentile') return locationFor(p).cityPercentile;
+    if (PILLAR_KEYS.includes(key as typeof PILLAR_KEYS[number])) {
+      return pillarScores(p, groupMultipliers, affordabilityFocus)[key] ?? null;
+    }
+    if (key === 'housing_value') {
+      return pillarScores(p, groupMultipliers, affordabilityFocus).housing_affordability ?? null;
+    }
     if (key === 'daily_needs' || key === 'daily_life') {
-      return pillarScores(p, groupMultipliers, affordabilityFocus).daily_life;
+      return pillarScores(p, groupMultipliers, affordabilityFocus).daily_life ?? null;
     }
     if (key === 'transit_service' || key === 'transit') {
-      return pillarScores(p, groupMultipliers, affordabilityFocus).transit;
+      return pillarScores(p, groupMultipliers, affordabilityFocus).transit ?? null;
     }
-    if (key === 'walking_quality') return pillarScores(p, groupMultipliers, affordabilityFocus).walk;
-    if (key === 'urban_form') return num(p.s_urban_form, 50);
+    if (key === 'walking_quality') {
+      return pillarScores(p, groupMultipliers, affordabilityFocus).walk ?? null;
+    }
+    if (key === 'urban_form') return num(p.s_urban_form);
     if (key === 'price') {
       const budget = budgetAffordScalar(p, ctx);
       if (budget != null) return budget;
-      return num(p.s_rent_relative_city, 50);
+      return num(p.s_rent_relative_city);
     }
     const prop = SCORE_PROPS[key];
-    const s = prop ? Number(p[prop]) : NaN;
-    if (Number.isFinite(s)) return s;
-    return 50;
+    if (prop) return num(p[prop]);
+    return null;
   }
 
-  function thresholdsForActiveKeys() {
-    const out = {};
+  function thresholdsForActiveKeys(): Record<string, number | null> {
+    const out: Record<string, number | null> = {};
     PILLAR_KEYS.forEach((key) => { out[key] = 0; });
     return out;
   }
 
-  function evaluateHex(p) {
-    const { score, pillars } = livingScore(p, pillarWeights, groupMultipliers, affordabilityFocus);
-    const factors = {};
+  function evaluateHex(p: PipelinePoint): HexEval {
+    const loc = locationFor(p);
+    const pillars = loc.pillars;
+    const factors: HexEval['factors'] = {};
     PILLAR_KEYS.forEach((key) => {
+      const s = pillars[key];
       factors[key] = {
-        score: pillars[key],
+        score: s ?? 0,
         threshold: 0,
-        passed: true,
+        passed: s != null,
         importance: 2,
       };
     });
-    // Budget filter: mark as failed if over budget (optional overlay).
     const budget = budgetAffordScalar(p, ctx);
     let passed = true;
     if (budget != null && budget < 50) {
@@ -329,66 +400,115 @@ export function createScoringEngine(ctx, features) {
         factors,
         failedFactors: passed ? (dominated ? ['dominated'] : []) : ['price'],
         activeKeys: breakdown.activeDims.map((d) => `match_${d}`),
-        livingScore: score,
+        livingScore: loc.objectiveScore,
+        objectiveScore: loc.objectiveScore,
+        personalMatchScore: loc.personalMatchScore,
+        cityPercentile: loc.cityPercentile,
+        confidence: loc.confidence,
         pillars,
         matchBreakdown: breakdown,
         dominated,
+        locationScore: loc,
       };
     }
 
+    const knownPillarVals = PILLAR_KEYS
+      .map((k) => pillars[k])
+      .filter((v): v is number => v != null);
     return {
       passed,
-      priorityScore: score,
-      matchScore: score,
-      bottleneckMatch: Math.min(...PILLAR_KEYS.map((k) => pillars[k])),
+      priorityScore: loc.objectiveScore,
+      matchScore: loc.personalMatchScore,
+      bottleneckMatch: knownPillarVals.length
+        ? Math.min(...knownPillarVals)
+        : undefined,
       factors,
       failedFactors: passed ? [] : ['price'],
-      activeKeys: PILLAR_KEYS,
-      livingScore: score,
+      activeKeys: [...PILLAR_KEYS],
+      livingScore: loc.objectiveScore,
+      objectiveScore: loc.objectiveScore,
+      personalMatchScore: loc.personalMatchScore,
+      cityPercentile: loc.cityPercentile,
+      confidence: loc.confidence,
       pillars,
+      locationScore: loc,
     };
   }
 
   function rebuildCityStats() {
     rebuildMatchRanking();
-    cityFactorStats = computeCityFactorStats(features, ctx, factorScalar);
-    passingCount = features.reduce((n, f) => n + (evaluateHex(f.properties).passed ? 1 : 0), 0);
-    return { cityFactorStats, passingCount };
+    clearLocCache();
+    // Objective index once (no personal match) — percentiles are O(log n) lookups after.
+    cityIndex = buildCityObjectiveIndex(features);
+    ctx.cityObjectiveByH3 = cityIndex.byH3;
+    ctx.cityObjectiveSorted = cityIndex.sorted;
+    // Skip full-city factor stats on the hot path (debug can recompute lazily).
+    // Budget filter: only scan when a budget is set; otherwise all hexes pass.
+    if (ctx.maxMonthlyBudget && ctx.maxMonthlyBudget > 0) {
+      passingCount = 0;
+      for (const f of features) {
+        const budget = budgetAffordScalar(f.properties, ctx);
+        if (budget == null || budget >= 50) passingCount += 1;
+      }
+    } else {
+      passingCount = features.length;
+    }
+    return { passingCount };
   }
 
-  function hasPassingHexes() {
-    return passingCount > 0;
-  }
-
-  function displayScalar(p) {
+  function paintScalar(p: PipelinePoint): number | null {
+    if (ctx._diagnoseKey) return factorScalar(ctx._diagnoseKey, p);
     if (ctx.scoringMode === 'match') {
       const h3 = String(p.h3 ?? p.h3_index ?? '');
       const cached = matchByH3.get(h3);
       const dominated = cached?.dominated ?? false;
       return matchDisplayScore(p, matchPrefs, dominated);
     }
-    const { score } = livingScore(p, pillarWeights, groupMultipliers, affordabilityFocus);
-    // Soft budget dimming when over budget
-    const budget = budgetAffordScalar(p, ctx);
-    if (budget != null && budget < 100) {
-      return clamp100(score * (0.55 + 0.45 * (budget / 100)));
+
+    const mode = ctx.mapMetricMode || 'objective';
+    let score: number | null = null;
+
+    if (mode === 'objective') {
+      // Fastest path: precomputed absolute objective (no personalization).
+      const h3 = String(p.h3 ?? p.h3_index ?? '');
+      const fromIndex = h3 ? cityIndex.byH3.get(h3) : undefined;
+      score = fromIndex !== undefined
+        ? fromIndex
+        : (num(p.s_objective) ?? num(p.s_living) ?? locationFor(p).objectiveScore);
+    } else if (mode === 'city_percentile') {
+      score = resolveCityPercentile(p, cityIndex);
+    } else if (typeof mode === 'string' && mode.startsWith('pillar:')) {
+      const key = mode.slice('pillar:'.length);
+      score = factorScalar(key, p);
+    } else if (mode === 'personal_match') {
+      score = locationFor(p).personalMatchScore;
+    } else {
+      score = locationFor(p).objectiveScore;
+    }
+
+    // Soft budget dimming when over budget (does not invent a score).
+    if (score != null) {
+      const budget = budgetAffordScalar(p, ctx);
+      if (budget != null && budget < 100) {
+        return clamp100(score * (0.55 + 0.45 * (budget / 100)));
+      }
     }
     return score;
   }
 
-  function comfortScalar(p) {
-    return displayScalar(p);
+  function comfortScalar(p: PipelinePoint): number | null {
+    return paintScalar(p);
   }
 
-  function rawComfortScalar(p) {
+  function rawComfortScalar(p: PipelinePoint): number | null {
     if (ctx.scoringMode === 'match') {
       return scoreMatchHex(p, matchPrefs).finalScore;
     }
-    return livingScore(p, pillarWeights, groupMultipliers, affordabilityFocus).score;
+    return locationFor(p).objectiveScore;
   }
 
   function findClosestMatch() {
-    let best = null;
+    let best: { properties: PipelinePoint; eval: HexEval } | null = null;
     let bestMatch = -1;
     for (const f of features) {
       const ev = evaluateHex(f.properties);
@@ -401,13 +521,13 @@ export function createScoringEngine(ctx, features) {
     return best;
   }
 
-  function closestMatchMessage() {
+  function closestMatchMessage(): string | null {
     if (passingCount > 0) return null;
     if (!ctx.maxMonthlyBudget) return null;
     return 'Keine Viertel im Budget — Living Score trotzdem farbig (gedimmt).';
   }
 
-  function applyPreset(preset) {
+  function applyPreset(preset: Record<string, number> | string) {
     const resolved = typeof preset === 'string' ? PRESETS[preset] : preset;
     if (!resolved) return rebuildCityStats();
     pillarWeights = extractPillarWeights(resolved);
@@ -416,32 +536,27 @@ export function createScoringEngine(ctx, features) {
     ctx.pillarWeights = pillarWeights;
     ctx.groupMultipliers = groupMultipliers;
     ctx.affordabilityFocus = affordabilityFocus;
-    activeProfile = resolved._id || activeProfile;
     IMPORTANCE_KEYS.forEach((k) => { ctx.weights[k] = resolved[k] ?? 0; });
-    PREF_KEYS.forEach((k) => { ctx.prefTargets[k] = resolved[k] ?? 50; });
+    clearLocCache();
     return rebuildCityStats();
   }
 
-  function onlyFactor(key, level) {
-    // Diagnose: colour by a single pillar/factor.
-    if (PILLAR_KEYS.includes(key) || SCORE_PROPS[key]) {
+  function onlyFactor(key: string, level: number) {
+    if (PILLAR_KEYS.includes(key as typeof PILLAR_KEYS[number]) || SCORE_PROPS[key]) {
       ctx._diagnoseKey = level > 0 ? key : null;
+      if (level > 0) {
+        const pillarKey = key === 'housing_value' ? 'housing_affordability' : key;
+        ctx.mapMetricMode = `pillar:${pillarKey}`;
+      }
     }
     return rebuildCityStats();
   }
 
-  function absScoreForKey(key, p) {
+  function absScoreForKey(key: string, p: PipelinePoint): number | null {
     return factorScalar(key, p);
   }
 
   if (features.length) rebuildCityStats();
-
-  // Diagnose override on display
-  const baseDisplay = displayScalar;
-  function comfortWithDiagnose(p) {
-    if (ctx._diagnoseKey) return factorScalar(ctx._diagnoseKey, p);
-    return baseDisplay(p);
-  }
 
   return {
     ctx,
@@ -455,16 +570,17 @@ export function createScoringEngine(ctx, features) {
     rebuildCityStats,
     rebuildComfortRemap: rebuildCityStats,
     isComfortRemapActive: () => false,
-    hasPassingHexes,
+    hasPassingHexes: () => passingCount > 0,
     getPassingCount: () => passingCount,
     closestMatchMessage,
     findClosestMatch,
-    comfortScalar: comfortWithDiagnose,
+    comfortScalar,
     rawComfortScalar,
     applyPreset,
     onlyFactor,
     absScoreForKey,
-    livingScore: (p) => livingScore(p, pillarWeights, groupMultipliers, affordabilityFocus),
+    livingScore: (p) => locationFor(p),
+    locationScore: (p) => locationFor(p),
     pillarScores: (p) => pillarScores(p, groupMultipliers, affordabilityFocus),
     getPillarWeights: () => ({ ...pillarWeights }),
     getGroupMultipliers: () => ({ ...groupMultipliers }),
@@ -473,16 +589,33 @@ export function createScoringEngine(ctx, features) {
     getMatchPrefs: () => ({ ...matchPrefs }),
     getMatchRanking: () => matchRanking,
     getMatchAlternatives: () => matchAlternatives,
+    getMapMetricMode: () => ctx.mapMetricMode || 'objective',
+    setMapMetricMode: (mode: MapMetricMode) => {
+      ctx.mapMetricMode = mode;
+      clearLocCache();
+    },
   };
 }
 
-export function createContextFromFeatures(features, meta = {}) {
-  const rents = features.map((f) => Number(f.properties.rent_eur_m2)).filter(Number.isFinite);
+export function createContextFromFeatures(
+  features: Array<{ properties?: PipelinePoint | null }> = [],
+  meta: Record<string, unknown> = {},
+): ScoringContext {
+  const propsList = features.map((f) => (f.properties ?? {}) as PipelinePoint);
+  const rents = propsList
+    .map((p) => num(p.rent_eur_m2))
+    .filter((v): v is number => v != null);
   const dailyNeedsCategories = Object.fromEntries(DAILY_NEED_CATS.map((c) => [c, true]));
-  const heatVals = features.map((f) => Number(f.properties.s_heat)).filter(Number.isFinite);
+  const heatVals = propsList
+    .map((p) => num(p.s_heat))
+    .filter((v): v is number => v != null);
   const heatSpread = heatVals.length >= 2 ? Math.max(...heatVals) - Math.min(...heatVals) : 0;
-  const noiseDbs = features.map((f) => Number(f.properties.noise_db)).filter(Number.isFinite);
-  const noiseScores = features.map((f) => Number(f.properties.s_noise)).filter(Number.isFinite);
+  const noiseDbs = propsList
+    .map((p) => num(p.noise_db))
+    .filter((v): v is number => v != null);
+  const noiseScores = propsList
+    .map((p) => num(p.s_noise))
+    .filter((v): v is number => v != null);
   const noiseSpread =
     noiseDbs.length >= 2
       ? Math.max(...noiseDbs) - Math.min(...noiseDbs)
@@ -498,7 +631,7 @@ export function createContextFromFeatures(features, meta = {}) {
     affordabilityFocus: 0,
     activeProfile: 'standard',
     _diagnoseKey: null,
-    centerAnchors: meta.center_anchors || [],
+    centerAnchors: (meta.center_anchors as unknown[]) || [],
     rentMin: rents.length ? Math.min(...rents) : 0,
     rentMax: rents.length ? Math.max(...rents) : 1,
     hasRent: meta.has_rent !== false,
@@ -510,12 +643,17 @@ export function createContextFromFeatures(features, meta = {}) {
     dailyNeedsCategories,
     desiredAreaM2: DEFAULT_SIZE_M2,
     maxMonthlyBudget: null,
-    scoringMode: 'living', // Match Score deferred until foundation validates
+    scoringMode: 'living',
     matchPrefs: { ...DEFAULT_MATCH_PREFS },
+    mapMetricMode: 'objective',
   };
 }
 
-export function summarizeComfort(features, comfortFn, threshold = 40) {
+export function summarizeComfort(
+  features: Array<{ properties: PipelinePoint }>,
+  comfortFn: (p: PipelinePoint) => number | null,
+  threshold = 40,
+) {
   let red = 0;
   let yellow = 0;
   let green = 0;
@@ -539,15 +677,22 @@ export function summarizeComfort(features, comfortFn, threshold = 40) {
   };
 }
 
-export function findExtremeHex(features, key, mode = 'min') {
+export function findExtremeHex(
+  features: Array<{ properties: PipelinePoint }>,
+  key: string,
+  mode: 'min' | 'max' = 'min',
+) {
   const sorted = [...features].sort((a, b) => {
-    const av = Number(a.properties[key]);
-    const bv = Number(b.properties[key]);
+    const av = num(a.properties[key]) ?? (mode === 'min' ? Infinity : -Infinity);
+    const bv = num(b.properties[key]) ?? (mode === 'min' ? Infinity : -Infinity);
     return mode === 'min' ? av - bv : bv - av;
   });
   return sorted[0]?.properties;
 }
 
-export function countPassingHexes(features, engine) {
+export function countPassingHexes(
+  features: Array<{ properties: PipelinePoint }>,
+  engine: ScoringEngine,
+) {
   return features.filter((f) => engine.evaluateHex(f.properties).passed).length;
 }
