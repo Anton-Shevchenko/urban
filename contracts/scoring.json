@@ -1,0 +1,47 @@
+{
+  "$comment": "infra-only branch: objective score ≡ daily_life (shops, cafés, doctors, schools). Other pillars stay in the contract at weight 0 so exports and UI types do not drift. Consumed by the Python pipeline, the frontend scoring engine and the Go services. Run `make contract-check` after edits.",
+  "score_method_version": "objective-v2",
+  "objective_weights": {
+    "daily_life": 1.0,
+    "walk": 0.0,
+    "green": 0.0,
+    "transit": 0.0,
+    "quiet": 0.0,
+    "housing_affordability": 0.0
+  },
+  "objective_weight_aliases": {
+    "walking_quality": "walk",
+    "noise": "quiet",
+    "housing_value": "housing_affordability"
+  },
+  "informational_pillars": {
+    "$comment": "Exported and shown in the UI but weighted 0 in the objective score.",
+    "centrality": 0.0,
+    "center": 0.0
+  },
+  "daily_life": {
+    "group_weights": {
+      "food": 0.30,
+      "health": 0.15,
+      "education": 0.20,
+      "services": 0.15,
+      "restaurants_cafes": 0.10,
+      "leisure": 0.10
+    },
+    "group_aliases": {
+      "other": "leisure"
+    },
+    "category_weights": {
+      "food": { "supermarket": 0.60, "market": 0.25, "bakery": 0.15 },
+      "health": { "doctor": 0.40, "clinic": 0.35, "pharmacy": 0.25 },
+      "education": { "kita": 0.50, "school": 0.50 },
+      "services": { "administration": 0.40, "bank": 0.30, "post": 0.30 },
+      "restaurants_cafes": { "restaurant": 0.60, "cafe": 0.40 },
+      "leisure": { "sports": 0.60, "playground": 0.40 }
+    }
+  },
+  "walk_minute_bands": {
+    "$comment": "Piecewise [minutes, score] knots. Python interpolates the same knots in score_scales.walk_minute_band_score; the frontend uses them as ACCESSIBILITY_BANDS.default.",
+    "default": [[0, 100], [5, 100], [10, 70], [15, 30], [20, 0]]
+  }
+}

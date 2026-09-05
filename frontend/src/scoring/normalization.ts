@@ -5,7 +5,9 @@
  * Do not use city percentile / rank as input to Objective Score.
  */
 
-export const SCORE_METHOD_VERSION = 'objective-v2' as const;
+import { SCORE_METHOD_VERSION, WALK_MINUTE_BANDS } from './generated/contract';
+
+export { SCORE_METHOD_VERSION };
 
 export type ScoreMethodVersion = typeof SCORE_METHOD_VERSION;
 
@@ -104,7 +106,11 @@ export const OBJECTIVE_NORMALIZATION = {
   },
 } as const satisfies Record<string, NormalizationScale>;
 
-/** Category-specific walk-minute bands (replaces dead WALK_DECAY). */
+/**
+ * Category-specific walk-minute bands. `default` is generated from
+ * contracts/scoring.json so it stays identical to the pipeline's
+ * score_scales.walk_minute_band_score; per-category curves are frontend-only.
+ */
 export const ACCESSIBILITY_BANDS: Record<string, [number, number][]> = {
   supermarket: [[0, 100], [5, 100], [10, 70], [15, 30], [20, 0]],
   bakery: [[0, 100], [5, 100], [8, 80], [12, 40], [18, 0]],
@@ -122,7 +128,7 @@ export const ACCESSIBILITY_BANDS: Record<string, [number, number][]> = {
   sports: [[0, 100], [8, 100], [15, 70], [25, 30], [35, 0]],
   playground: [[0, 100], [5, 100], [10, 70], [15, 30], [20, 0]],
   park: [[0, 100], [5, 100], [10, 80], [15, 50], [25, 15], [40, 0]],
-  default: [[0, 100], [5, 100], [10, 70], [15, 30], [20, 0]],
+  default: WALK_MINUTE_BANDS.default,
 };
 
 export const CONFIDENCE_THRESHOLDS = {

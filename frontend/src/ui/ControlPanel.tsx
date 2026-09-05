@@ -1,40 +1,29 @@
 import { useMemo } from 'react';
-import type { CSSProperties, FormEvent } from 'react';
-import { METRIC_MODE_LABELS, PRESET_LABELS, PROFILE_IDS } from '../scoring/constants';
-import { LIVING_WEIGHTS, PILLAR_KEYS, PILLAR_LABELS } from '../scoring/engine';
-import type { WohnIndexState } from '../hooks/useWohnIndex';
+import type { FormEvent } from 'react';
+import { useCityData, useMapViewState, useWeights } from '../wohnindex';
 
 type Props = {
-  state: WohnIndexState;
   onClose: () => void;
 };
 
-export function ControlPanel({ state, onClose }: Props) {
+export function ControlPanel({ onClose }: Props) {
+  const { cityName, meta, features, hasRent, searchStatus, searching, runSearch } = useCityData();
   const {
-    cityName,
-    meta,
     desiredAreaM2,
     setDesiredAreaM2,
     maxMonthlyBudget,
     setMaxMonthlyBudget,
-    mapView,
+  } = useWeights();
+  const {
     setMapView,
     mapViewOptions,
     showHiddenGems,
     setShowHiddenGems,
-    searchStatus,
-    searching,
-    runSearch,
-    applyPreset,
-    setPillarWeightPercent,
-    hasRent,
-    weights,
-    activeProfile,
-  } = state;
+  } = useMapViewState();
 
   const hasVoi = Boolean(
     (meta as { has_value_opportunity?: boolean }).has_value_opportunity
-    || state.features.some((f) => {
+    || features.some((f) => {
       const p = f.properties as Record<string, unknown> | null;
       if (!p) return false;
       const cls = String(p.voi_class || '');
@@ -47,38 +36,9 @@ export function ControlPanel({ state, onClose }: Props) {
     }),
   );
 
-  /** Live renormalised % from UI weights (updates while dragging). */
-  const pillarWeights = useMemo(() => {
-    const raw: Record<string, number> = {};
-    let sum = 0;
-    PILLAR_KEYS.forEach((k) => {
-      const v = Number(weights[k]);
-      // 0 is a valid weight (metric off); only default when unset.
-      const w = Number.isFinite(v) && v >= 0 ? v : ((LIVING_WEIGHTS as Record<string, number>)[k] ?? 0);
-      raw[k] = w;
-      sum += w;
-    });
-    if (sum <= 0) return { ...LIVING_WEIGHTS };
-    const out: Record<string, number> = {};
-    PILLAR_KEYS.forEach((k) => { out[k] = raw[k] / sum; });
-    return out;
-  }, [weights]);
-
-  const legendNote = useMemo(() => {
-    if (mapView === 'personal_match') {
-      const profileLabel = PRESET_LABELS[activeProfile] || activeProfile;
-      return `Your Match · Profil „${profileLabel}“ · absolute 0–100 · ändert nicht den Living Score`;
-    }
-    if (mapView === 'city_percentile') {
-      return 'City percentile · Anteil besserer Punkte in dieser Stadt (nicht absolute Qualität)';
-    }
-    if (mapView && mapView !== 'objective' && mapView !== 'comfort' && mapView !== 'living') {
-      const key = mapView.replace(/^pillar:/, '');
-      const label = state.FACTOR_LABELS[key] ?? METRIC_MODE_LABELS[mapView] ?? key;
-      return `${label} · absolute 0–100`;
-    }
-    return 'Living Score · absolute Qualität der Lage · vergleichbar zwischen Städten · 85–100 Excellent · 70–84 Good · 55–69 Average · 40–54 Below average · 0–39 Poor · grau = Insufficient data';
-  }, [mapView, state.FACTOR_LABELS, state.paintVersion, activeProfile]);
+  const legendNote = useMemo(() => (
+    'Infrastruktur · Läden, Cafés, Ärzte, Schulen u. a. · absolute 0–100 · 85–100 Excellent · 70–84 Good · 55–69 Average · 40–54 Below average · 0–39 Poor · grau = Insufficient data'
+  ), []);
 
   const onSearch = (e: FormEvent) => {
     e.preventDefault();
@@ -95,7 +55,7 @@ export function ControlPanel({ state, onClose }: Props) {
         <div className="panel-head-text">
           <h1>{cityName}</h1>
           <p className="subtitle">
-            Living Score (objektiv) · Your Match (Profil) · 0–100
+            Infrastruktur · Läden, Cafés, Services · 0–100
             {cityType ? ` · ${cityType}` : ''}
           </p>
         </div>
@@ -138,58 +98,6 @@ export function ControlPanel({ state, onClose }: Props) {
         ) : null}
       </section>
 
-      <section className="presets">
-        <span className="section-label">Your Match · Profil</span>
-        <div className="preset-row">
-          {PROFILE_IDS.map((id) => (
-            <button
-              key={id}
-              type="button"
-              className={`preset${activeProfile === id ? ' is-active' : ''}`}
-              aria-pressed={activeProfile === id}
-              onClick={() => applyPreset(id)}
-            >
-              {PRESET_LABELS[id] || id}
-            </button>
-          ))}
-        </div>
-        {activeProfile === 'custom' ? (
-          <p className="section-hint">Eigene Gewichte für Your Match — Living Score bleibt unverändert.</p>
-        ) : (
-          <p className="section-hint">
-            Profile beeinflussen nur Your Match, nicht den objektiven Living Score.
-          </p>
-        )}
-      </section>
-
-      <section className="sliders sliders-positive">
-        <span className="section-label">Your Match · Gewichte</span>
-        <p className="section-hint">Summe immer 100% — steuert Your Match; Karte „Living Score“ bleibt objektiv.</p>
-        {PILLAR_KEYS.map((key) => {
-          const pct = Math.round((pillarWeights[key] ?? 0) * 100);
-          return (
-            <label key={key} className="slider">
-              <div className="slider-top">
-                <span>{PILLAR_LABELS[key as keyof typeof PILLAR_LABELS] || key}</span>
-                <b className="slider-value">{pct}%</b>
-              </div>
-              <div className="slider-track-wrap">
-                <input
-                  type="range"
-                  min={0}
-                  max={100}
-                  step={1}
-                  value={pct}
-                  style={{ '--fill': `${pct}%` } as CSSProperties}
-                  aria-label={`${PILLAR_LABELS[key as keyof typeof PILLAR_LABELS] || key} Gewicht`}
-                  onChange={(e) => setPillarWeightPercent(key, Number(e.target.value))}
-                />
-              </div>
-            </label>
-          );
-        })}
-      </section>
-
       {hasVoi && (
         <section className="sliders">
           <span className="section-label">Value Opportunity</span>
@@ -209,7 +117,7 @@ export function ControlPanel({ state, onClose }: Props) {
             </div>
           ) : null}
           <p className="section-hint">
-            Borders only — fill stays Living Score. Best quality of life for the money.
+            Borders only — fill stays Infrastruktur. Best quality of life for the money.
           </p>
         </section>
       )}
@@ -217,7 +125,7 @@ export function ControlPanel({ state, onClose }: Props) {
       {hasRent && (
         <section className="sliders">
           <span className="section-label">Optional: Budget-Filter</span>
-          <p className="section-hint">Dimmt Gebiete über dem Budget — ändert den Living Score nicht grundlegend.</p>
+          <p className="section-hint">Dimmt Gebiete über dem Budget — ändert den Infrastruktur-Score nicht.</p>
           <div className="rent-budget">
             <label className="budget-field">
               <span>Wohnfläche (m²)</span>
@@ -249,17 +157,11 @@ export function ControlPanel({ state, onClose }: Props) {
       )}
 
       <section className="legend">
-        <span className="section-label">
-          {mapView === 'personal_match'
-            ? 'Your Match'
-            : mapView === 'city_percentile'
-              ? 'City percentile'
-              : 'Living Score'}
-        </span>
+        <span className="section-label">Infrastruktur</span>
         <label className="map-view-field">
           <span>Kartenansicht</span>
           <select
-            value={mapView === 'comfort' || mapView === 'living' ? 'objective' : mapView}
+            value="objective"
             onChange={(e) => setMapView(e.target.value)}
             aria-label="Kartenansicht wählen"
           >
@@ -272,15 +174,15 @@ export function ControlPanel({ state, onClose }: Props) {
         </label>
         <div className="legend-bar" id="legend-bar" />
         <div className="legend-scale">
-          <span>{mapView === 'city_percentile' ? '0 niedriger' : '0 Poor'}</span>
-          <span>{mapView === 'city_percentile' ? '100 höher in Stadt' : '100 Excellent'}</span>
+          <span>0 Poor</span>
+          <span>100 Excellent</span>
         </div>
         <p className="section-hint legend-note">{legendNote}</p>
       </section>
 
       <footer className="panel-foot">
         <span>
-          {meta.count ?? state.features.length} Hexagone · H3 res {meta.h3_res ?? '?'}
+          {meta.count ?? features.length} Hexagone · H3 res {meta.h3_res ?? '?'}
         </span>
         <nav>
           <a href="/legal/impressum.html">Impressum</a> ·{' '}
@@ -291,7 +193,6 @@ export function ControlPanel({ state, onClose }: Props) {
           <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">
             OpenStreetMap
           </a>
-          , Zensus 2022, GTFS (Mobilithek).
         </p>
         <p className="disclaimer">Informativ, keine Rechts-/Immobilienberatung.</p>
       </footer>

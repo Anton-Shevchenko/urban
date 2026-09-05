@@ -1,10 +1,10 @@
 import { ramp } from '../scoring/color';
-import { PILLAR_LABELS } from '../scoring/engine';
-import type { WohnIndexState, CompareItem } from '../hooks/useWohnIndex';
+import { PILLAR_KEYS, PILLAR_LABELS } from '../scoring/engine';
+import type { ScoringEngine } from '../scoring/types';
+import { useCompare, usePaint } from '../wohnindex';
+import type { CompareItem } from '../wohnindex';
 
-type Props = { state: WohnIndexState };
-
-function computeCard(item: CompareItem, engine: WohnIndexState['engine']) {
+function computeCard(item: CompareItem, engine: ScoringEngine) {
   const result = engine.locationScore
     ? engine.locationScore(item.props)
     : engine.livingScore
@@ -37,8 +37,9 @@ function computeCard(item: CompareItem, engine: WohnIndexState['engine']) {
 
 const euro = (v: number) => v.toLocaleString('de-DE', { maximumFractionDigits: 0 }) + ' €';
 
-export function ComparePanel({ state }: Props) {
-  const { comparison, setComparison, engine } = state;
+export function ComparePanel() {
+  const { comparison, setComparison } = useCompare();
+  const { engine } = usePaint();
   const cards = comparison.map((item) => ({ item, m: computeCard(item, engine) }));
   let bestId: string | null = null;
   let bestRatio = -Infinity;
@@ -58,7 +59,7 @@ export function ComparePanel({ state }: Props) {
             Alle löschen
           </button>
         </header>
-        <p className="compare-hint">15-Minuten-Living-Score — vergleichbar zwischen Städten.</p>
+        <p className="compare-hint">Infrastruktur-Score — Läden, Cafés, Ärzte, Schulen in Gehweite.</p>
         <div className="compare-list">
           {cards.map(({ item, m }) => (
             <div key={item.id} className={`compare-card${item.id === bestId ? ' is-best' : ''}`}>
@@ -76,7 +77,7 @@ export function ComparePanel({ state }: Props) {
                 </button>
               </div>
               <div className="cc-badge" style={{ background: m.color }}>
-                <span>Living Score</span>
+                <span>Infrastruktur</span>
                 <b>{m.comfort == null ? '—' : m.comfort.toFixed(0)}</b>
               </div>
               <p className="section-hint">
@@ -86,11 +87,10 @@ export function ComparePanel({ state }: Props) {
               </p>
               <table className="cc-factors">
                 <tbody>
-                  {Object.entries(PILLAR_LABELS)
-                    .filter(([key]) => key !== 'housing_value')
-                    .map(([key, label]) => {
+                  {PILLAR_KEYS.map((key) => {
                       const pillars = m.pillars as Record<string, number | null | undefined>;
                       const val = pillars[key];
+                      const label = PILLAR_LABELS[key] || key;
                       return (
                     <tr key={key}>
                       <td>{label}</td>

@@ -1,3 +1,4 @@
+import type { HexProperties, ObjectivePillarKey } from './generated/contract';
 import type { MatchAlternative, MatchBreakdown, MatchPrefs, RankedMatch } from './match';
 import type { ScoreMethodVersion } from './normalization';
 
@@ -10,13 +11,8 @@ export type MapMetricMode =
   | 'city_percentile'
   | `pillar:${string}`;
 
-export type ObjectivePillarKey =
-  | 'daily_life'
-  | 'walk'
-  | 'green'
-  | 'transit'
-  | 'quiet'
-  | 'housing_affordability';
+/** Generated from contracts/scoring.json — do not redeclare the pillar list. */
+export type { ObjectivePillarKey } from './generated/contract';
 
 /** Pillars available for Personal Match (includes informational centrality). */
 export type PersonalPillarKey = ObjectivePillarKey | 'centrality';
@@ -56,8 +52,13 @@ export type LocationScoreResult = {
   score: number | null;
 };
 
-/** Loose hex property bag from GeoJSON / pipeline export. */
-export type PipelinePoint = Record<string, unknown>;
+/**
+ * Hex property bag from the pipeline export. Keys declared in
+ * contracts/hex-properties.schema.json are typed; anything else stays unknown.
+ */
+export type PipelinePoint = HexProperties;
+
+export type { HexProperties };
 
 export type ScoringContext = {
   weights: Record<string, number>;

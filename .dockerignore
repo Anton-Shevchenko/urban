@@ -1,12 +1,16 @@
+.git
+.github
 .venv
 **/__pycache__
 **/*.pyc
-.git
+.pytest_cache
+.ruff_cache
+.DS_Store
+
+# Go service images are built from this root context; keep it small.
+**/*_test.go
+**/testdata
 frontend/node_modules
 frontend/dist
-data/cities
-data/cache
-data/gtfs
-data/zensus
-.DS_Store
 **/.vite
+microservices/data/data

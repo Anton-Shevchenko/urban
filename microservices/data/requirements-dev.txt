@@ -1,0 +1,2 @@
+# Install from the repository root (path is cwd-relative).
+-e ./microservices/data[dev]

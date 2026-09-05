@@ -1,9 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { STEP_LABELS } from '../scoring/constants';
 import type { ScoreDistribution } from '../scoring/histogram';
-import type { WohnIndexState } from '../hooks/useWohnIndex';
-
-type Props = { state: WohnIndexState };
+import { usePaint } from '../wohnindex';
 
 function DistChart({ dist }: { dist: ScoreDistribution }) {
   const maxCount = Math.max(...dist.bins.map((b) => b.count), 1);
@@ -57,8 +55,8 @@ function MiniBars({ dist }: { dist: ScoreDistribution }) {
   );
 }
 
-export function DebugPanel({ state }: Props) {
-  const report = state.debugReport;
+export function DebugPanel() {
+  const { debugReport: report, debugMode, painting } = usePaint();
   const [distKey, setDistKey] = useState<string>('comfort');
 
   useEffect(() => {
@@ -82,7 +80,7 @@ export function DebugPanel({ state }: Props) {
     );
   }, [report, distKey]);
 
-  if (!state.debugMode || !report) return null;
+  if (!debugMode || !report) return null;
 
   return (
     <aside id="debug-panel" aria-label="Debug scoring">
@@ -186,7 +184,7 @@ export function DebugPanel({ state }: Props) {
         )}
       </pre>
 
-      {state.painting ? <p className="section-hint">Karte wird neu berechnet …</p> : null}
+      {painting ? <p className="section-hint">Karte wird neu berechnet …</p> : null}
     </aside>
   );
 }

@@ -1,40 +1,38 @@
 import { BrowserRouter, Link, Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom';
 import { useCallback } from 'react';
-import { useWohnIndex } from './hooks/useWohnIndex';
-import { useTheme } from './hooks/useTheme';
+import { WohnIndexProvider, useCityData, usePaint } from './wohnindex';
+import { useTheme, type ThemeMode } from './hooks/useTheme';
 import { usePanelOpen } from './hooks/usePanelOpen';
 import { MapView } from './map/MapView';
 import { ControlPanel } from './ui/ControlPanel';
 import { ComparePanel } from './ui/ComparePanel';
+import { ChatPanel } from './ui/ChatPanel';
 import { DebugPanel } from './ui/DebugPanel';
 import { TopBar } from './ui/TopBar';
 import { HomePage } from './ui/HomePage';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import './styles.css';
+import './styles/index.css';
 
-function MapApp() {
-  const { slug } = useParams<{ slug: string }>();
-  const navigate = useNavigate();
-  const routeSlug = slug ?? null;
-  const { theme, toggleTheme, mapStyleUrl } = useTheme();
-  const { panelOpen, togglePanel } = usePanelOpen();
-
-  const onCityReady = useCallback(
-    (nextSlug: string) => {
-      if (nextSlug === routeSlug) return;
-      navigate(`/city/${encodeURIComponent(nextSlug)}`, { replace: false });
-    },
-    [navigate, routeSlug],
-  );
-
-  const state = useWohnIndex({ routeSlug, onCityReady });
-
-  if (!routeSlug) return <Navigate to="/" replace />;
+function MapAppShell({
+  theme,
+  toggleTheme,
+  mapStyleUrl,
+  panelOpen,
+  togglePanel,
+}: {
+  theme: ThemeMode;
+  toggleTheme: () => void;
+  mapStyleUrl: string;
+  panelOpen: boolean;
+  togglePanel: () => void;
+}) {
+  const { cityName, loading, loadError } = useCityData();
+  const { painting } = usePaint();
 
   return (
     <>
       <TopBar
-        cityName={state.cityName}
+        cityName={cityName}
         theme={theme}
         onToggleTheme={toggleTheme}
         brandSlot={
@@ -43,9 +41,9 @@ function MapApp() {
           </Link>
         }
       />
-      <MapView state={state} mapStyleUrl={mapStyleUrl} />
+      <MapView mapStyleUrl={mapStyleUrl} />
       {panelOpen ? (
-        <ControlPanel state={state} onClose={togglePanel} />
+        <ControlPanel onClose={togglePanel} />
       ) : (
         <button
           type="button"
@@ -64,20 +62,51 @@ function MapApp() {
           <span>Filter</span>
         </button>
       )}
-      <ComparePanel state={state} />
-      <DebugPanel state={state} />
-      {(state.loading || state.loadError) && (
+      <ComparePanel />
+      <ChatPanel />
+      <DebugPanel />
+      {(loading || loadError) && (
         <div id="loading" className="loading">
-          {state.loadError || 'Lade Daten …'}
+          {loadError || 'Lade Daten …'}
         </div>
       )}
-      {!state.loading && !state.loadError && state.painting && (
+      {!loading && !loadError && painting && (
         <div id="paint-loading" className="loading paint-loading" role="status">
           <span className="paint-spinner" aria-hidden />
           Karte wird aktualisiert …
         </div>
       )}
     </>
+  );
+}
+
+function MapApp() {
+  const { slug } = useParams<{ slug: string }>();
+  const navigate = useNavigate();
+  const routeSlug = slug ?? null;
+  const { theme, toggleTheme, mapStyleUrl } = useTheme();
+  const { panelOpen, togglePanel } = usePanelOpen();
+
+  const onCityReady = useCallback(
+    (nextSlug: string) => {
+      if (nextSlug === routeSlug) return;
+      navigate(`/city/${encodeURIComponent(nextSlug)}`, { replace: false });
+    },
+    [navigate, routeSlug],
+  );
+
+  if (!routeSlug) return <Navigate to="/" replace />;
+
+  return (
+    <WohnIndexProvider routeSlug={routeSlug} onCityReady={onCityReady}>
+      <MapAppShell
+        theme={theme}
+        toggleTheme={toggleTheme}
+        mapStyleUrl={mapStyleUrl}
+        panelOpen={panelOpen}
+        togglePanel={togglePanel}
+      />
+    </WohnIndexProvider>
   );
 }
 

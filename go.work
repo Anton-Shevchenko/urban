@@ -1,0 +1,9 @@
+go 1.25.0
+
+use (
+	./gateway
+	./gen
+	./microservices/hex
+	./microservices/llm
+	./pkg
+)

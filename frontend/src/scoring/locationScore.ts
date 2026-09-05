@@ -125,20 +125,9 @@ export function locationScore(
   const focus = options.affordabilityFocus ?? 0;
 
   const bundle = computeObjectivePillars(p, null);
-  // Prefer pipeline composite when objective-v2 already wrote it.
-  const preObjective = num(p.s_objective) ?? num(p.s_living);
-  let objectiveScore: number | null;
-  let confidence: number;
-  let weightedContributions: Partial<Record<string, number>>;
-  if (preObjective != null) {
-    objectiveScore = clamp100(preObjective);
-    // Coverage from available objective pillars.
-    const { confidence: cov } = computeObjectiveScore(bundle);
-    confidence = cov > 0 ? cov : 0.85;
-    weightedContributions = {};
-  } else {
-    ({ objectiveScore, confidence, weightedContributions } = computeObjectiveScore(bundle));
-  }
+  // Always recompute from OBJECTIVE_WEIGHTS (infra-only ≡ daily_life).
+  // Do not prefer stale pipeline s_objective / s_living composites.
+  const { objectiveScore, confidence, weightedContributions } = computeObjectiveScore(bundle);
 
   const personal = computePersonalMatchScore(
     bundle.pillars,
@@ -156,10 +145,7 @@ export function locationScore(
     confidence,
     weightedContributions,
     bundle.missingData,
-    [
-      ...bundle.proxiesUsed,
-      ...(preObjective != null ? ['s_objective'] : []),
-    ],
+    bundle.proxiesUsed,
   );
 
   return {
@@ -208,8 +194,7 @@ export function cityPercentileForScore(
 
 /** Objective-only score for city index (no personal match work). */
 export function objectiveScoreOnly(p: PipelinePoint): number | null {
-  const pre = num(p.s_objective) ?? num(p.s_living);
-  if (pre != null) return clamp100(pre);
+  // Infra-only: recompute from weights (= daily_life), ignore stale composites.
   const bundle = computeObjectivePillars(p, null);
   return computeObjectiveScore(bundle).objectiveScore;
 }
@@ -222,7 +207,7 @@ export function buildCityObjectiveIndex(
   for (const f of features) {
     const p = f.properties;
     const h3 = String(p.h3 ?? p.h3_index ?? '');
-    // Hot path: read precomputed objective — never recompute daily-life here.
+    // Infra-only: objectiveScoreOnly ≡ daily_life from current weights.
     const objectiveScore = objectiveScoreOnly(p);
     if (h3) byH3.set(h3, objectiveScore);
     if (objectiveScore != null) sorted.push(objectiveScore);

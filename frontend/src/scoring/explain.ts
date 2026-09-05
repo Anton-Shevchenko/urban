@@ -2,11 +2,11 @@
  * German narrative explanations for the Objective Living Score.
  */
 
-import { LIVING_WEIGHTS, PILLAR_LABELS, livingScore } from './engine';
+import { LIVING_WEIGHTS, PILLAR_KEYS, PILLAR_LABELS, livingScore } from './engine';
 import { num } from './num';
 
 const PILLAR_WEAKNESS: Record<string, string> = {
-  daily_life: 'Alltagsversorgung (Läden, Ärzte, Schulen)',
+  daily_life: 'Infrastruktur (Läden, Cafés, Ärzte, Schulen)',
   walk: 'Gehqualität (Straßen, Sicherheit, Komfort)',
   green: 'Grün- und Parkzugang',
   transit: 'ÖPNV-Anbindung',
@@ -17,7 +17,7 @@ const PILLAR_WEAKNESS: Record<string, string> = {
 };
 
 const PILLAR_STRENGTH: Record<string, string> = {
-  daily_life: 'Alltagsziele sind gut zu Fuß erreichbar',
+  daily_life: 'gute Infrastruktur zu Fuß erreichbar',
   walk: 'angenehme und sichere Gehwege',
   green: 'gutes Grünangebot in der Nähe',
   transit: 'starke ÖPNV-Anbindung',
@@ -39,13 +39,13 @@ function minutesLabel(m: number | null | undefined): string | null {
 }
 
 function headline(score: number | null): string {
-  if (score == null) return 'Unzureichende Daten für den Living Score.';
-  if (score >= 90) return 'Hervorragend ohne Auto.';
-  if (score >= 80) return 'Sehr gut ohne Auto.';
-  if (score >= 70) return 'Gut geeignet für ein Leben ohne Auto.';
-  if (score >= 55) return 'Eingeschränkt autoarm machbar.';
-  if (score >= 40) return 'Eher autoabhängig.';
-  return 'Stark autoabhängig.';
+  if (score == null) return 'Unzureichende Daten für die Infrastruktur.';
+  if (score >= 90) return 'Hervorragende Infrastruktur.';
+  if (score >= 80) return 'Sehr gute Infrastruktur.';
+  if (score >= 70) return 'Gute Infrastruktur in der Nähe.';
+  if (score >= 55) return 'Durchschnittliche Infrastruktur.';
+  if (score >= 40) return 'Eingeschränkte Infrastruktur.';
+  return 'Schwache Infrastruktur.';
 }
 
 export function explainLivingScore(
@@ -70,9 +70,10 @@ export function explainLivingScore(
   const score = loc.objectiveScore;
   const rounded = score != null ? Math.round(score) : null;
 
-  // Only known pillars for narrative (skip nulls).
+  // Infra-only: narrative from active pillars (daily_life).
   const pillarsKnown: Record<string, number> = {};
-  for (const [k, v] of Object.entries(loc.pillars)) {
+  for (const k of PILLAR_KEYS) {
+    const v = loc.pillars[k];
     if (v != null && Number.isFinite(v)) pillarsKnown[k] = v;
   }
 
@@ -81,15 +82,6 @@ export function explainLivingScore(
   const pharmacy = minutesLabel(num(p.dn_pharmacy_min) ?? undefined);
   if (supermarket) amenityBits.push(`Supermarkt in ${supermarket} Gehminuten`);
   if (pharmacy) amenityBits.push(`Apotheke in ${pharmacy}`);
-  const transit = pillarsKnown.transit;
-  if (transit != null && transit >= 75) amenityBits.push('guter ÖPNV');
-  else if (transit != null && transit >= 55) amenityBits.push('ÖPNV in der Nähe');
-
-  const rent = num(p.rent_eur_m2);
-  const rel = num(p.s_rent_relative_city);
-  if (rent != null && rel != null && rel < 20 && affordabilityFocus > 0.3) {
-    amenityBits.push(`teuer (~${rent.toFixed(0)} €/m²)`);
-  }
 
   const sorted = Object.entries(pillarsKnown).sort((a, b) => a[1] - b[1]);
   const weakest = sorted[0];
@@ -127,11 +119,14 @@ export function explainLivingScore(
 }
 
 export function pillarBreakdownRows(pillars: Record<string, number | null | undefined>) {
-  return Object.entries(pillars)
-    .filter(([, score]) => score != null && Number.isFinite(score))
-    .map(([key, score]) => ({
+  return PILLAR_KEYS
+    .filter((key) => {
+      const score = pillars[key];
+      return score != null && Number.isFinite(score);
+    })
+    .map((key) => ({
       key,
       label: PILLAR_LABELS[key] || key,
-      score: Math.round(score as number),
+      score: Math.round(pillars[key] as number),
     }));
 }

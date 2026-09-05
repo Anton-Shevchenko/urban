@@ -21,23 +21,25 @@ import type {
   ScoreDiagnostics,
 } from './types';
 
-export const OBJECTIVE_WEIGHTS: Record<ObjectivePillarKey, number> = {
-  daily_life: 0.20,
-  walk: 0.15,
-  green: 0.15,
-  transit: 0.15,
-  quiet: 0.15,
-  housing_affordability: 0.20,
-};
+/**
+ * Objective weights, daily-life groups and walk bands are generated from
+ * contracts/scoring.json — the same file the Python pipeline reads. Never
+ * hardcode these numbers here; edit the contract and run `make contract-check`.
+ */
+import {
+  DAILY_LIFE_CATEGORY_WEIGHTS,
+  DAILY_LIFE_GROUP_ALIASES,
+  DAILY_LIFE_GROUP_WEIGHTS,
+  OBJECTIVE_PILLAR_KEYS,
+  OBJECTIVE_WEIGHTS,
+} from './generated/contract';
 
-export const OBJECTIVE_PILLAR_KEYS: ObjectivePillarKey[] = [
-  'daily_life',
-  'walk',
-  'green',
-  'transit',
-  'quiet',
-  'housing_affordability',
-];
+export {
+  DAILY_LIFE_CATEGORY_WEIGHTS,
+  DAILY_LIFE_GROUP_WEIGHTS,
+  OBJECTIVE_PILLAR_KEYS,
+  OBJECTIVE_WEIGHTS,
+};
 
 /** Personal Match may also weight centrality. */
 export const PERSONAL_PILLAR_KEYS: PersonalPillarKey[] = [
@@ -45,40 +47,17 @@ export const PERSONAL_PILLAR_KEYS: PersonalPillarKey[] = [
   'centrality',
 ];
 
-/** @deprecated Alias — personal/UI pillar keys (includes centrality). */
-export const PILLAR_KEYS = PERSONAL_PILLAR_KEYS;
+/** UI / active metric keys — infrastructure only on this branch. */
+export const PILLAR_KEYS: PersonalPillarKey[] = ['daily_life'];
 
-/** Default personal weights (= objective + small centrality). */
+/** Default personal weights — infrastructure only (matches OBJECTIVE_WEIGHTS). */
 export const LIVING_WEIGHTS: Record<PersonalPillarKey, number> = {
-  daily_life: 0.20,
-  walk: 0.15,
-  green: 0.15,
-  transit: 0.15,
-  quiet: 0.15,
-  housing_affordability: 0.15,
-  centrality: 0.05,
+  ...OBJECTIVE_WEIGHTS,
+  centrality: 0,
 };
 
-export const DAILY_LIFE_GROUP_WEIGHTS: Record<string, number> = {
-  food: 0.30,
-  health: 0.15,
-  education: 0.20,
-  services: 0.15,
-  restaurants_cafes: 0.10,
-  leisure: 0.10,
-};
-
-export const DAILY_LIFE_CATEGORY_WEIGHTS: Record<string, Record<string, number>> = {
-  food: { supermarket: 0.60, market: 0.25, bakery: 0.15 },
-  health: { doctor: 0.40, clinic: 0.35, pharmacy: 0.25 },
-  education: { kita: 0.50, school: 0.50 },
-  services: { administration: 0.40, bank: 0.30, post: 0.30 },
-  restaurants_cafes: { restaurant: 0.60, cafe: 0.40 },
-  leisure: { sports: 0.60, playground: 0.40 },
-};
-
-/** Legacy group name used in older presets / pipeline. */
-const GROUP_ALIAS: Record<string, string> = { other: 'leisure' };
+/** Legacy group name still emitted by the pipeline (dl_other). */
+const GROUP_ALIAS: Record<string, string> = DAILY_LIFE_GROUP_ALIASES;
 
 export const DAILY_LIFE_GROUPS: Record<string, string[]> = Object.fromEntries(
   Object.entries(DAILY_LIFE_CATEGORY_WEIGHTS).map(([g, cats]) => [g, Object.keys(cats)]),

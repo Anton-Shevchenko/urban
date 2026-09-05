@@ -1,0 +1,62 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "urban-data"
+version = "0.1.0"
+description = "Living Score data pipeline and API"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "geopandas==1.1.4",
+    "h3==4.5.0",
+    "shapely==2.1.2",
+    "pyproj==3.7.2",
+    "numpy==2.5.1",
+    "pandas==3.0.3",
+    "requests==2.34.2",
+    "pyarrow==25.0.0",
+    "openrouteservice==2.3.3",
+    "fastapi==0.118.0",
+    "uvicorn[standard]==0.37.0",
+    "pydantic==2.11.9",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==9.1.1",
+    "ruff==0.16.4",
+    "httpx==0.28.1",
+]
+
+[project.scripts]
+urban-generate = "pipeline.run:main"
+urban-backfill-rents = "pipeline.backfill.rents:main"
+urban-backfill-foundation = "pipeline.backfill.foundation:main"
+urban-data-api = "server.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["pipeline*", "server*"]
+exclude = ["tests*", "scripts*", "data*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-q --strict-markers"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 110
+exclude = [".venv", "data", "pipeline/generated"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "C4"]
+ignore = [
+    "E501",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E402"]

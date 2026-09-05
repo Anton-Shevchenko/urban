@@ -1,0 +1,338 @@
+{
+  "$comment": "Pipeline steps and metric registry. Edit here, then `python contracts/codegen.py`. Score weights stay in scoring.json; hex property types stay in hex-properties.schema.json.",
+  "hex_fact_sheet": {
+    "$comment": "Compact GetHex payload. Keys must be declared in the schema (or match patternProperties).",
+    "pillars": {
+      "daily_life": "s_daily_life",
+      "walk": "s_walk",
+      "green": "s_green",
+      "transit": "s_transit",
+      "center": "s_center",
+      "quiet": "s_quiet",
+      "housing_value": "s_housing_value"
+    },
+    "walk_minutes": {
+      "supermarket": "dn_supermarket_min",
+      "pharmacy": "dn_pharmacy_min",
+      "school": "dn_school_min",
+      "kita": "dn_kita_min",
+      "doctor": "dn_doctor_min",
+      "playground": "dn_playground_min",
+      "center": "center_min"
+    },
+    "scalars": ["h3", "s_living", "rent_eur_m2", "voi_class", "voi_explain"]
+  },
+  "steps": [
+    {
+      "id": "grid",
+      "label": "grid",
+      "module": "pipeline.ingest.grid",
+      "func": "main",
+      "wave": 0,
+      "cache_file": "grid.parquet",
+      "required_cache": true
+    },
+    {
+      "id": "osm",
+      "label": "osm download",
+      "module": "pipeline.ingest.osm_data",
+      "func": "main",
+      "wave": 1,
+      "required_cache": false
+    },
+    {
+      "id": "centers",
+      "label": "centers",
+      "module": "pipeline.ingest.centers",
+      "func": "main",
+      "wave": 2,
+      "cache_file": "centers.json",
+      "required_cache": true
+    },
+    {
+      "id": "business",
+      "label": "factor: business",
+      "module": "pipeline.factors.business",
+      "func": "main",
+      "wave": 3,
+      "cache_file": "factor_business.parquet",
+      "required_cache": true
+    },
+    {
+      "id": "green",
+      "label": "factor: green",
+      "module": "pipeline.factors.green",
+      "func": "main",
+      "wave": 3,
+      "cache_file": "factor_green.parquet",
+      "required_cache": true
+    },
+    {
+      "id": "noise",
+      "label": "factor: noise",
+      "module": "pipeline.factors.noise",
+      "func": "main",
+      "wave": 3,
+      "cache_file": "factor_noise.parquet",
+      "required_cache": true
+    },
+    {
+      "id": "transport",
+      "label": "factor: transport",
+      "module": "pipeline.factors.transport",
+      "func": "main",
+      "wave": 3,
+      "cache_file": "factor_transport.parquet",
+      "required_cache": true
+    },
+    {
+      "id": "daily_needs",
+      "label": "factor: daily needs",
+      "module": "pipeline.factors.daily_needs",
+      "func": "main",
+      "wave": 3,
+      "cache_file": "factor_daily_needs.parquet",
+      "required_cache": true
+    },
+    {
+      "id": "transit_service",
+      "label": "factor: transit service",
+      "module": "pipeline.factors.transit_service",
+      "func": "main",
+      "wave": 3,
+      "cache_file": "factor_transit_service.parquet",
+      "required_cache": true
+    },
+    {
+      "id": "heat",
+      "label": "factor: heat",
+      "module": "pipeline.factors.heat",
+      "func": "main",
+      "wave": 3,
+      "cache_file": "factor_heat.parquet",
+      "required_cache": true,
+      "enabled": false
+    },
+    {
+      "id": "housing",
+      "label": "factor: housing",
+      "module": "pipeline.factors.housing",
+      "func": "main",
+      "wave": 3,
+      "cache_file": "factor_housing.parquet",
+      "required_cache": true
+    },
+    {
+      "id": "center",
+      "label": "factor: center",
+      "module": "pipeline.factors.center",
+      "func": "main",
+      "wave": 4,
+      "cache_file": "factor_center.parquet",
+      "required_cache": true
+    },
+    {
+      "id": "traffic_safety",
+      "label": "factor: traffic safety",
+      "module": "pipeline.factors.traffic_safety",
+      "func": "main",
+      "wave": 4,
+      "cache_file": "factor_traffic_safety.parquet",
+      "required_cache": true
+    },
+    {
+      "id": "walking_quality",
+      "label": "factor: walking quality",
+      "module": "pipeline.factors.walking_quality",
+      "func": "main",
+      "wave": 5,
+      "cache_file": "factor_walking_quality.parquet",
+      "required_cache": false
+    },
+    {
+      "id": "urban_form",
+      "label": "factor: urban form",
+      "module": "pipeline.factors.urban_form",
+      "func": "main",
+      "wave": 5,
+      "cache_file": "factor_urban_form.parquet",
+      "required_cache": false
+    },
+    {
+      "id": "rents",
+      "label": "rents",
+      "module": "pipeline.rents",
+      "func": "main",
+      "wave": 6,
+      "cache_file": "rents.parquet",
+      "required_cache": true
+    },
+    {
+      "id": "export",
+      "label": "normalize + export",
+      "module": "pipeline.export.normalize_export",
+      "func": "main",
+      "wave": 7,
+      "always_rerun": true
+    }
+  ],
+  "metrics": [
+    {
+      "id": "living",
+      "kind": "composite",
+      "score_key": "s_living",
+      "label": "Infrastruktur",
+      "type": "objective_positive",
+      "meta": { "source": "composite", "confidence": 0.7, "year": 2026, "note": "15-Minute Living Score" }
+    },
+    {
+      "id": "daily_life",
+      "kind": "pillar",
+      "score_key": "s_daily_life",
+      "label": "Infrastruktur",
+      "aliases": ["daily_needs"],
+      "alias_keys": ["s_daily_needs"],
+      "type": "objective_positive",
+      "factor": "daily_needs",
+      "meta": { "source": "osm", "confidence": 0.75, "year": 2026 }
+    },
+    {
+      "id": "walk",
+      "kind": "pillar",
+      "score_key": "s_walk",
+      "label": "Gehqualität",
+      "aliases": ["walking_quality"],
+      "alias_keys": ["s_walking_quality"],
+      "type": "objective_positive",
+      "factor": "walking_quality",
+      "meta": { "source": "osm_roads+green+noise", "confidence": 0.55, "year": 2026 }
+    },
+    {
+      "id": "green",
+      "kind": "pillar",
+      "score_key": "s_green",
+      "label": "Grün",
+      "type": "objective_positive",
+      "factor": "green",
+      "meta": { "source": "osm", "confidence": 0.7, "year": 2026 }
+    },
+    {
+      "id": "transit",
+      "kind": "pillar",
+      "score_key": "s_transit",
+      "label": "ÖPNV",
+      "aliases": ["transit_service"],
+      "alias_keys": ["s_transit_service"],
+      "type": "objective_positive",
+      "factor": "transit_service",
+      "meta": { "source": "gtfs_or_osm", "confidence": 0.6, "year": 2026 }
+    },
+    {
+      "id": "quiet",
+      "kind": "pillar",
+      "score_key": "s_quiet",
+      "label": "Ruhe",
+      "aliases": ["noise"],
+      "alias_keys": ["s_noise"],
+      "type": "objective_positive",
+      "factor": "noise",
+      "meta": { "source": "osm_proxy", "confidence": 0.5, "year": 2026 }
+    },
+    {
+      "id": "housing_affordability",
+      "kind": "pillar",
+      "score_key": "s_housing_affordability",
+      "paint_key": "s_rent_kalt_benchmark",
+      "label": "Wohnkosten",
+      "aliases": ["housing_value"],
+      "alias_keys": ["s_housing_value"],
+      "type": "objective_positive",
+      "factor": "rents",
+      "meta": { "source": "mixed", "confidence": 0.5, "year": 2026 }
+    },
+    {
+      "id": "centrality",
+      "kind": "informational",
+      "score_key": "s_center",
+      "label": "Zentralität",
+      "aliases": ["center"],
+      "type": "objective_positive",
+      "factor": "center",
+      "meta": { "source": "ors_or_osm", "confidence": 0.65, "year": 2026 }
+    },
+    {
+      "id": "urban_form",
+      "kind": "overlay",
+      "score_key": "s_urban_form",
+      "label": "Stadtform",
+      "type": "objective_positive",
+      "factor": "urban_form",
+      "meta": { "source": "zensus_osm_landuse", "confidence": 0.55, "year": 2026 }
+    },
+    {
+      "id": "urban_activity",
+      "kind": "overlay",
+      "score_key": "s_urban_activity",
+      "label": "Aktivität",
+      "type": "preference",
+      "factor": "business",
+      "meta": { "source": "osm", "confidence": 0.7, "year": 2026 }
+    },
+    {
+      "id": "heat",
+      "kind": "overlay",
+      "score_key": "s_heat",
+      "label": "Hitze",
+      "type": "objective_negative",
+      "factor": "heat",
+      "enabled": false,
+      "meta": {
+        "source": "osm_proxy",
+        "confidence": 0.35,
+        "year": 2026,
+        "note": "satellite preferred when available",
+        "enabled": false
+      }
+    },
+    {
+      "id": "traffic_safety",
+      "kind": "overlay",
+      "score_key": "s_traffic_safety",
+      "label": "Straßenrisiko",
+      "type": "objective_negative",
+      "factor": "traffic_safety",
+      "meta": {
+        "source": "osm_roads+accidents",
+        "confidence": 0.4,
+        "year": 2026,
+        "metric": "accident_density",
+        "note": "Straßenrisiko — keine Kriminalitätsdaten"
+      }
+    },
+    {
+      "id": "housing",
+      "kind": "overlay",
+      "score_key": "s_housing",
+      "label": "Wohnalter",
+      "type": "preference",
+      "factor": "housing",
+      "meta": { "source": "zensus_or_osm", "confidence": 0.45, "year": 2022 }
+    },
+    {
+      "id": "density",
+      "kind": "overlay",
+      "score_key": "s_density",
+      "label": "Dichte",
+      "type": "preference"
+    },
+    {
+      "id": "price",
+      "kind": "overlay",
+      "score_key": "s_rent_relative_city",
+      "label": "Miete (stadtrelativ)",
+      "type": "objective_positive",
+      "factor": "rents",
+      "meta": { "source": "mixed", "confidence": 0.5, "year": 2026 }
+    }
+  ]
+}

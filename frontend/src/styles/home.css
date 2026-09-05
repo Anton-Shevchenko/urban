@@ -1,0 +1,387 @@
+/* --- home / landing ------------------------------------------------------ */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.home {
+  min-height: 100%;
+  color: var(--ink);
+  background: var(--bg);
+  overflow-x: hidden;
+}
+
+.home-top {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: var(--topbar-h);
+  padding: 0 20px;
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.home-top-brand {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.home-hero {
+  position: relative;
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  align-items: flex-end;
+  padding: calc(var(--topbar-h) + 32px) 24px 56px;
+  overflow: hidden;
+}
+
+.home-hero-bg {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 80% 60% at 70% 20%, rgba(26, 107, 138, 0.28), transparent 55%),
+    radial-gradient(ellipse 50% 40% at 15% 80%, rgba(45, 106, 79, 0.18), transparent 50%),
+    linear-gradient(165deg, #e8f1f4 0%, #f7fafb 42%, #dfe9ee 100%);
+  animation: home-bg-shift 18s ease-in-out infinite alternate;
+}
+
+[data-theme="dark"] .home-hero-bg {
+  background:
+    radial-gradient(ellipse 80% 60% at 70% 20%, rgba(94, 179, 209, 0.22), transparent 55%),
+    radial-gradient(ellipse 50% 40% at 15% 80%, rgba(45, 106, 79, 0.16), transparent 50%),
+    linear-gradient(165deg, #0c1218 0%, #121a24 45%, #0f1820 100%);
+}
+
+.home-hero-bg::before {
+  content: "";
+  position: absolute;
+  inset: -20%;
+  opacity: 0.35;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='64' viewBox='0 0 56 64'%3E%3Cpath fill='none' stroke='%231a6b8a' stroke-opacity='0.22' stroke-width='1' d='M28 2 L54 17 V47 L28 62 L2 47 V17 Z'/%3E%3C/svg%3E");
+  background-size: 56px 64px;
+  animation: home-hex-drift 40s linear infinite;
+}
+
+[data-theme="dark"] .home-hero-bg::before {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='64' viewBox='0 0 56 64'%3E%3Cpath fill='none' stroke='%235eb3d1' stroke-opacity='0.2' stroke-width='1' d='M28 2 L54 17 V47 L28 62 L2 47 V17 Z'/%3E%3C/svg%3E");
+  opacity: 0.45;
+}
+
+@keyframes home-bg-shift {
+  from { transform: scale(1); }
+  to { transform: scale(1.04); }
+}
+
+@keyframes home-hex-drift {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(-28px, -32px, 0); }
+}
+
+.home-hero-inner {
+  position: relative;
+  z-index: 1;
+  max-width: 640px;
+  animation: home-hero-in 0.7s ease-out both;
+}
+
+@keyframes home-hero-in {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.home-hero-brand {
+  margin: 0 0 12px;
+  font-size: clamp(2.4rem, 7vw, 4.2rem);
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  line-height: 0.95;
+  color: var(--ink);
+}
+
+.home-hero-title {
+  margin: 0 0 14px;
+  font-size: clamp(1.35rem, 3.2vw, 1.85rem);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+  color: var(--ink);
+  max-width: 22ch;
+}
+
+.home-hero-lead {
+  margin: 0 0 28px;
+  font-size: 1.05rem;
+  line-height: 1.5;
+  color: var(--muted);
+  max-width: 38ch;
+}
+
+.home-hero-cta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.home-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 11px 18px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  border: 1px solid transparent;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, transform 0.15s;
+}
+
+.home-btn:hover { transform: translateY(-1px); }
+
+.home-btn-primary {
+  background: var(--accent);
+  color: #fff;
+}
+
+.home-btn-primary:hover { filter: brightness(1.06); }
+
+.home-btn-ghost {
+  background: color-mix(in srgb, var(--panel-solid) 70%, transparent);
+  border-color: var(--line);
+  color: var(--ink);
+  backdrop-filter: blur(6px);
+}
+
+.home-btn-ghost:hover {
+  border-color: var(--accent);
+  background: var(--accent-hover);
+}
+
+.home-section {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 72px 24px;
+}
+
+.home-section-head {
+  margin-bottom: 28px;
+  max-width: 540px;
+}
+
+.home-section-head h2 {
+  margin: 0 0 10px;
+  font-size: clamp(1.5rem, 3vw, 1.85rem);
+  letter-spacing: -0.02em;
+}
+
+.home-section-head p {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.home-pillars {
+  list-style: none;
+  margin: 0 0 36px;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.home-pillars li {
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--input-bg);
+}
+
+.home-sources {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 28px 32px;
+}
+
+.home-source h3 {
+  margin: 0 0 8px;
+  font-size: 15px;
+  letter-spacing: -0.01em;
+}
+
+.home-source p {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.home-cities {
+  padding-top: 48px;
+  border-top: 1px solid var(--line);
+}
+
+.home-cities-toolbar {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.home-filter input,
+.home-search-form input {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 11px 12px;
+  font-size: 14px;
+  color: var(--ink);
+  background: var(--input-bg);
+}
+
+.home-filter input:focus,
+.home-search-form input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.home-search-form {
+  display: flex;
+  gap: 6px;
+}
+
+.home-search-form button {
+  border: 0;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+  font-size: 13px;
+  padding: 0 16px;
+  border-radius: 10px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.home-search-form button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.home-status {
+  margin: 0 0 14px;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.home-status.is-error { color: var(--danger); }
+
+.home-city-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--line);
+}
+
+.home-city-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 4px;
+  border-bottom: 1px solid var(--line);
+  text-decoration: none;
+  color: inherit;
+  transition: background 0.15s, padding-left 0.15s;
+}
+
+.home-city-row:hover {
+  background: var(--accent-hover);
+  padding-left: 8px;
+}
+
+.home-city-name {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+.home-city-meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px 12px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.home-city-tag {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.home-cities-count {
+  margin: 14px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.home-foot {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 32px 24px 48px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.home-foot a { color: var(--accent); text-decoration: none; }
+.home-foot a:hover { text-decoration: underline; }
+.home-foot nav { margin-bottom: 8px; }
+
+@media (max-width: 720px) {
+  .home-sources { grid-template-columns: 1fr; gap: 20px; }
+  .home-cities-toolbar { grid-template-columns: 1fr; }
+  .home-city-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+  .home-city-meta { justify-content: flex-start; }
+  .home-hero { padding-bottom: 40px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-hero-bg,
+  .home-hero-bg::before,
+  .home-hero-inner {
+    animation: none;
+  }
+}

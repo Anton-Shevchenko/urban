@@ -62,6 +62,7 @@ describe('objective vs personal independence', () => {
       groupMultipliers: { dl_health: 1.8 },
     });
     expect(a.objectiveScore).toBe(b.objectiveScore);
+    // Group multipliers still recompute daily_life for personal match.
     expect(a.personalMatchScore).not.toBe(b.personalMatchScore);
   });
 
@@ -93,7 +94,7 @@ describe('missing data', () => {
     expect(r.pillars.housing_affordability).toBeNull();
   });
 
-  it('partial data scores known pillars and lowers confidence', () => {
+  it('partial data without daily_life yields no objective score (infra-only)', () => {
     const r = locationScore({
       walking_quality_score: 70,
       transit_service_score: 60,
@@ -101,10 +102,11 @@ describe('missing data', () => {
       s_green_strict: 50,
       // no rent, no daily life
     });
-    expect(r.objectiveScore).not.toBeNull();
+    // Objective is 100% daily_life — missing infra → no objective score.
+    expect(r.objectiveScore).toBeNull();
+    expect(r.pillars.daily_life).toBeNull();
     expect(r.pillars.housing_affordability).toBeNull();
-    expect(r.confidence).toBeLessThan(1);
-    expect(r.confidence).toBeGreaterThan(0);
+    expect(r.confidence).toBe(0);
   });
 });
 

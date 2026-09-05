@@ -1,5 +1,0 @@
-# Backend API dependencies (on top of pipeline/requirements.txt).
-# Install:  ./.venv/bin/pip install -r pipeline/requirements.txt -r server/requirements.txt
-fastapi==0.118.0
-uvicorn[standard]==0.37.0
-pydantic==2.11.9

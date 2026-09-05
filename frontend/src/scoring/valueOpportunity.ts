@@ -33,7 +33,54 @@ export function voiBorderWidth(p: Record<string, unknown>): number {
   return level === 2 ? 1.6 : 1.2;
 }
 
-export function formatVoiTooltipHtml(p: Record<string, unknown>): string | null {
+export type VoiTooltipRow = { label: string; value: string };
+
+export type VoiTooltipModel = {
+  title: string;
+  overpriced: boolean;
+  rows: VoiTooltipRow[];
+  head: string;
+  why: string[];
+  trade: string[];
+  tradeLabel: string;
+};
+
+function parseVoiExplain(explain: string, level: 1 | 2 | 3): {
+  head: string;
+  why: string[];
+  trade: string[];
+  tradeLabel: string;
+} {
+  const tradeLabel = level === 3 ? 'Negative:' : 'Trade-offs:';
+  if (!explain) return { head: '', why: [], trade: [], tradeLabel };
+  const lines = explain.split('\n').map((l) => l.trim()).filter(Boolean);
+  const head = lines[0] && !lines[0].startsWith('+') && !lines[0].startsWith('-')
+    && !/^reasons:?$/i.test(lines[0]) && !/^why:?$/i.test(lines[0])
+    && !/^trade-?offs?:?$/i.test(lines[0]) && !/^negative:?$/i.test(lines[0])
+    ? lines[0]
+    : '';
+  const why: string[] = [];
+  const trade: string[] = [];
+  let mode: 'why' | 'trade' = 'why';
+  for (const line of lines.slice(head ? 1 : 0)) {
+    if (/^(reasons|why):?$/i.test(line)) { mode = 'why'; continue; }
+    if (/^(trade-?offs?|negative):?$/i.test(line)) { mode = 'trade'; continue; }
+    if (line.startsWith('+')) {
+      mode = 'why';
+      why.push(line);
+    } else if (line.startsWith('-')) {
+      mode = 'trade';
+      trade.push(line);
+    } else if (mode === 'why') {
+      why.push(line);
+    } else {
+      trade.push(line);
+    }
+  }
+  return { head, why, trade, tradeLabel };
+}
+
+export function voiTooltipModel(p: Record<string, unknown>): VoiTooltipModel | null {
   const level = voiHighlightLevel(p);
   if (level === 0) return null;
 
@@ -54,87 +101,42 @@ export function formatVoiTooltipHtml(p: Record<string, unknown>): string | null 
   const strength = Number(p.voi_gem_strength);
   const explain = String(p.voi_explain || '').trim();
 
-  const rows: string[] = [];
+  const rows: VoiTooltipRow[] = [];
   if (Number.isFinite(living)) {
-    rows.push(`<tr><td>Living Score</td><td><b>${Math.round(living)}/100</b></td></tr>`);
+    rows.push({ label: 'Infrastruktur', value: `${Math.round(living)}/100` });
   }
   if (Number.isFinite(opp)) {
-    rows.push(`<tr><td>Value Opportunity</td><td><b>${Math.round(opp)}/100</b></td></tr>`);
+    rows.push({ label: 'Value Opportunity', value: `${Math.round(opp)}/100` });
   }
   if (Number.isFinite(rent)) {
-    rows.push(`<tr><td>Rent</td><td><b>${rent.toFixed(0)} €/m²</b></td></tr>`);
+    rows.push({ label: 'Rent', value: `${rent.toFixed(0)} €/m²` });
   }
   if (Number.isFinite(fairMin) && Number.isFinite(fairMax)) {
-    rows.push(
-      `<tr><td>Fair rent</td><td><b>${fairMin.toFixed(0)}–${fairMax.toFixed(0)} €/m²</b></td></tr>`,
-    );
+    rows.push({ label: 'Fair rent', value: `${fairMin.toFixed(0)}–${fairMax.toFixed(0)} €/m²` });
   } else if (Number.isFinite(fairMed)) {
-    rows.push(`<tr><td>Fair rent</td><td><b>${fairMed.toFixed(0)} €/m²</b></td></tr>`);
+    rows.push({ label: 'Fair rent', value: `${fairMed.toFixed(0)} €/m²` });
   }
   if (Number.isFinite(gap)) {
     const pct = Math.round(gap * 100);
-    const label = pct >= 0
+    const value = pct >= 0
       ? `−${pct}% (below fair rent)`
       : `+${Math.abs(pct)}% (above fair rent)`;
-    rows.push(`<tr><td>Price advantage</td><td><b>${label}</b></td></tr>`);
+    rows.push({ label: 'Price advantage', value });
   }
   if (Number.isFinite(premium) && (level === 3 || premium >= 60)) {
-    rows.push(`<tr><td>Location premium</td><td><b>${Math.round(premium)}/100</b></td></tr>`);
+    rows.push({ label: 'Location premium', value: `${Math.round(premium)}/100` });
   }
   if (Number.isFinite(strength) && level === 2) {
-    rows.push(`<tr><td>Gem strength</td><td><b>${Math.round(strength)}/100</b></td></tr>`);
+    rows.push({ label: 'Gem strength', value: `${Math.round(strength)}/100` });
   }
   if (conf) {
-    rows.push(`<tr><td>Confidence</td><td><b>${conf}</b></td></tr>`);
+    rows.push({ label: 'Confidence', value: conf });
   }
 
-  let whyHtml = '';
-  let tradeHtml = '';
-  if (explain) {
-    const lines = explain.split('\n').map((l) => l.trim()).filter(Boolean);
-    const head = lines[0] && !lines[0].startsWith('+') && !lines[0].startsWith('-')
-      && !/^reasons:?$/i.test(lines[0]) && !/^why:?$/i.test(lines[0])
-      && !/^trade-?offs?:?$/i.test(lines[0]) && !/^negative:?$/i.test(lines[0])
-      ? lines[0]
-      : '';
-    const why: string[] = [];
-    const trade: string[] = [];
-    let mode: 'why' | 'trade' = 'why';
-    for (const line of lines.slice(head ? 1 : 0)) {
-      if (/^(reasons|why):?$/i.test(line)) { mode = 'why'; continue; }
-      if (/^(trade-?offs?|negative):?$/i.test(line)) { mode = 'trade'; continue; }
-      if (line.startsWith('+')) {
-        mode = 'why';
-        why.push(line);
-      } else if (line.startsWith('-')) {
-        mode = 'trade';
-        trade.push(line);
-      } else if (mode === 'why') {
-        why.push(line);
-      } else {
-        trade.push(line);
-      }
-    }
-    const headHtml = head ? `<div class="tt-fail-msg">${head}</div>` : '';
-    whyHtml = why.length
-      ? `<div class="tt-voi-explain"><div><b>Why:</b></div>${why.map((l) => `<div>${l}</div>`).join('')}</div>`
-      : headHtml;
-    if (why.length && head) {
-      whyHtml = headHtml + whyHtml;
-    }
-    const tradeLabel = level === 3 ? 'Negative:' : 'Trade-offs:';
-    tradeHtml = trade.length
-      ? `<div class="tt-voi-explain"><div><b>${tradeLabel}</b></div>${trade.map((l) => `<div>${l}</div>`).join('')}</div>`
-      : '';
-  }
-
-  const titleClass = level === 3 ? 'tt-voi-over' : 'tt-pass';
-  return (
-    `<div class="tt-voi">` +
-    `<div class="${titleClass}"><b>${title}</b></div>` +
-    `<table class="tt-breakdown"><tbody>${rows.join('')}</tbody></table>` +
-    whyHtml +
-    tradeHtml +
-    `</div>`
-  );
+  return {
+    title,
+    overpriced: level === 3,
+    rows,
+    ...parseVoiExplain(explain, level),
+  };
 }

@@ -1,16 +1,13 @@
 /**
- * Living Score formulas & weights (tune here + normalization.ts / objective.ts).
+ * Personal-match presets and scoring façade.
  *
- * objective-v2 splits results into:
- *   objectiveScore — fixed absolute quality (no user profile)
- *   personalMatchScore — user weights / presets
- *   cityPercentile — within-city rank of objective
- *   confidence — data coverage / reliability
- *
- * Core math lives in objective.ts + locationScore.ts.
+ * Objective weights, daily-life groups and walk bands live in
+ * contracts/scoring.json (generated into ./generated/contract).
+ * PRESETS here only remix personalMatchScore.
  */
 
 import { locationScore } from './locationScore';
+import { ACCESSIBILITY_BANDS } from './normalization';
 import { clamp100, num } from './num';
 import {
   DAILY_LIFE_GROUP_WEIGHTS,
@@ -82,9 +79,9 @@ export {
 
 export { clamp100, finiteScore, num } from './num';
 
-/** Default walk-minute knots (same as ACCESSIBILITY_BANDS.default). */
-export const WALK_MINUTE_BAND_X = [0, 5, 10, 15, 20];
-export const WALK_MINUTE_BAND_Y = [100, 100, 70, 30, 0];
+/** Default walk-minute knots, split out of the contract band for chart code. */
+export const WALK_MINUTE_BAND_X = ACCESSIBILITY_BANDS.default.map(([minutes]) => minutes);
+export const WALK_MINUTE_BAND_Y = ACCESSIBILITY_BANDS.default.map(([, score]) => score);
 
 /**
  * @deprecated Absolute paint is always used for objective mode.
@@ -119,87 +116,23 @@ export type PresetDefinition = Record<string, number> & {
   dl_other?: number;
 };
 
+/** Infra-only: every profile is 100% daily_life (shops, cafés, services). */
+const INFRA_ONLY_PRESET: PresetDefinition = {
+  ...LIVING_WEIGHTS,
+  affordability_focus: 0,
+};
+
 /**
  * Profile pillar weights for Personal Match only (renormalised at use).
  * Does not affect objectiveScore.
  */
 export const PRESETS: Record<string, PresetDefinition> = {
-  standard: {
-    daily_life: 0.20,
-    walk: 0.15,
-    green: 0.15,
-    transit: 0.15,
-    quiet: 0.15,
-    housing_affordability: 0.15,
-    centrality: 0.05,
-    affordability_focus: 0,
-  },
-  family: {
-    daily_life: 0.24,
-    walk: 0.12,
-    green: 0.22,
-    transit: 0.10,
-    quiet: 0.12,
-    housing_affordability: 0.17,
-    centrality: 0.03,
-    affordability_focus: 0.55,
-    dl_education: 1.8,
-    dl_food: 1.3,
-    dl_health: 1.2,
-    dl_leisure: 0.7,
-    dl_other: 0.7,
-  },
-  young_professional: {
-    daily_life: 0.16,
-    walk: 0.14,
-    green: 0.08,
-    transit: 0.28,
-    quiet: 0.04,
-    housing_affordability: 0.10,
-    centrality: 0.20,
-    affordability_focus: 0.15,
-    dl_food: 1.1,
-    dl_restaurants_cafes: 1.4,
-    dl_services: 1.1,
-  },
-  senior: {
-    daily_life: 0.18,
-    walk: 0.18,
-    green: 0.10,
-    transit: 0.12,
-    quiet: 0.14,
-    housing_affordability: 0.26,
-    centrality: 0.02,
-    affordability_focus: 0.80,
-    dl_health: 1.8,
-    dl_services: 1.3,
-    dl_food: 1.2,
-  },
-  no_car: {
-    daily_life: 0.14,
-    walk: 0.28,
-    green: 0.06,
-    transit: 0.30,
-    quiet: 0.02,
-    housing_affordability: 0.08,
-    centrality: 0.12,
-    affordability_focus: 0.25,
-    dl_food: 1.3,
-    dl_health: 1.1,
-    dl_services: 1.2,
-    dl_restaurants_cafes: 1.1,
-  },
-  /** Budget-focused — not an alias of standard. */
-  budget: {
-    daily_life: 0.12,
-    walk: 0.10,
-    green: 0.08,
-    transit: 0.12,
-    quiet: 0.08,
-    housing_affordability: 0.42,
-    centrality: 0.08,
-    affordability_focus: 0.85,
-  },
+  standard: { ...INFRA_ONLY_PRESET },
+  family: { ...INFRA_ONLY_PRESET },
+  young_professional: { ...INFRA_ONLY_PRESET },
+  senior: { ...INFRA_ONLY_PRESET },
+  no_car: { ...INFRA_ONLY_PRESET },
+  budget: { ...INFRA_ONLY_PRESET },
 };
 
 // Legacy preset aliases

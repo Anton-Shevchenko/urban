@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+package llm.v1;
+
+option go_package = "urban/gen/llm/v1;llmv1";
+
+service LLMService {
+  rpc Complete(CompleteRequest) returns (CompleteResponse);
+  rpc CompleteStream(CompleteRequest) returns (stream Token);
+}
+
+message ChatMessage {
+  string role = 1;
+  string content = 2;
+}
+
+message CompleteRequest {
+  repeated ChatMessage messages = 1;
+  string model = 2;
+}
+
+message CompleteResponse {
+  string text = 1;
+}
+
+message Token {
+  string text = 1;
+  bool done = 2;
+}

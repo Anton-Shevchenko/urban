@@ -58,12 +58,12 @@ describe('absolute paint gate deprecated', () => {
 });
 
 describe('objective-v2 Living Score', () => {
-  it('uses fixed objective weights summing to 1 (no centrality)', () => {
+  it('uses fixed objective weights summing to 1 (infra-only)', () => {
     const sum = Object.values(OBJECTIVE_WEIGHTS).reduce((a, b) => a + b, 0);
     expect(sum).toBeCloseTo(1, 5);
     expect(OBJECTIVE_WEIGHTS).not.toHaveProperty('centrality');
-    expect(PILLAR_KEYS).toContain('housing_affordability');
-    expect(PILLAR_KEYS).toContain('centrality');
+    expect(OBJECTIVE_WEIGHTS.daily_life).toBe(1);
+    expect(PILLAR_KEYS).toEqual(['daily_life']);
   });
 
   it('computes objective score for Munich hexes', () => {
@@ -110,11 +110,11 @@ describe('objective-v2 Living Score', () => {
     }
   });
 
-  it('budget preset is not identical to standard', () => {
-    expect(PRESETS.budget).not.toEqual(PRESETS.standard);
-    expect(PRESETS.budget.housing_affordability).toBeGreaterThan(
-      PRESETS.standard.housing_affordability,
-    );
+  it('all presets are infrastructure-only', () => {
+    expect(PRESETS.budget.daily_life).toBe(1);
+    expect(PRESETS.standard.daily_life).toBe(1);
+    expect(PRESETS.budget.housing_affordability).toBe(0);
+    expect(PRESETS.standard.housing_affordability).toBe(0);
   });
 
   it('evaluateHex exposes objective / match / confidence', () => {

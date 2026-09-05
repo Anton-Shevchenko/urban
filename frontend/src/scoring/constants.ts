@@ -49,7 +49,7 @@ export const PROFILE_IDS = [
 export const PRESET_USES_PREFS = new Set<string>([]);
 
 export const METRIC_MODE_LABELS: Record<string, string> = {
-  objective: 'Living Score',
+  objective: 'Infrastruktur',
   personal_match: 'Your Match',
   city_percentile: 'City percentile',
 };

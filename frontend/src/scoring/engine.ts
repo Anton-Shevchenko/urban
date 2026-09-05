@@ -30,6 +30,11 @@ import {
   resolveCityPercentile,
   type CityObjectiveIndex,
 } from './formulas';
+import {
+  METRIC_LABELS,
+  PILLAR_LABELS as CONTRACT_PILLAR_LABELS,
+  SCORE_PROPS as CONTRACT_SCORE_PROPS,
+} from './generated/contract';
 import type {
   HexEval,
   LocationScoreResult,
@@ -95,68 +100,21 @@ export const IMPORTANCE_KEYS = [
 ];
 export const PREF_KEYS = ['urban_activity', 'density', 'housing'];
 
-export const SCORE_PROPS: Record<string, string> = {
-  center: 's_center',
-  centrality: 's_center',
-  daily_needs: 's_daily_needs',
-  daily_life: 's_daily_life',
-  transit_service: 's_transit_service',
-  transit: 's_transit',
-  walk: 's_walk',
-  walking_quality: 's_walking_quality',
-  urban_form: 's_urban_form',
-  green: 's_green',
-  quiet: 's_quiet',
-  noise: 's_noise',
-  housing_value: 's_rent_kalt_benchmark',
-  housing_affordability: 's_rent_kalt_benchmark',
-  heat: 's_heat',
-  traffic_safety: 's_traffic_safety',
-  urban_activity: 's_urban_activity',
-  density: 's_density',
-  housing: 's_housing',
-  living: 's_living',
-  price: 's_rent_relative_city',
+export const SCORE_PROPS: Record<string, string> = { ...CONTRACT_SCORE_PROPS };
+
+const MAP_MODE_LABELS: Record<string, string> = {
+  objective: 'Infrastruktur',
+  personal_match: 'Your Match',
+  city_percentile: 'City percentile',
+  custom_dest: 'Ziele',
 };
 
 export const FACTOR_LABELS: Record<string, string> = {
-  living: 'Living Score',
-  objective: 'Living Score',
-  personal_match: 'Your Match',
-  city_percentile: 'City percentile',
-  daily_life: 'Alltag',
-  walk: 'Gehqualität',
-  walking_quality: 'Gehqualität',
-  transit: 'ÖPNV',
-  green: 'Grün',
-  centrality: 'Zentralität',
-  center: 'Zentralität',
-  quiet: 'Ruhe',
-  housing_value: 'Wohnkosten',
-  housing_affordability: 'Wohnkosten',
-  urban_form: 'Stadtform',
-  daily_needs: 'Alltag',
-  transit_service: 'ÖPNV',
-  price: 'Miete (stadtrelativ)',
-  noise: 'Ruhe',
-  heat: 'Hitze',
-  traffic_safety: 'Straßenrisiko',
-  custom_dest: 'Ziele',
-  urban_activity: 'Aktivität',
-  density: 'Dichte',
-  housing: 'Wohnalter',
+  ...MAP_MODE_LABELS,
+  ...METRIC_LABELS,
 };
 
-export const PILLAR_LABELS: Record<string, string> = {
-  daily_life: 'Alltag',
-  walk: 'Gehqualität',
-  green: 'Grün',
-  transit: 'ÖPNV',
-  centrality: 'Zentralität',
-  quiet: 'Ruhe',
-  housing_affordability: 'Wohnkosten',
-  housing_value: 'Wohnkosten',
-};
+export const PILLAR_LABELS: Record<string, string> = { ...CONTRACT_PILLAR_LABELS };
 
 export function percentile(sorted: number[], p: number): number {
   if (!sorted.length) return 50;
@@ -469,12 +427,12 @@ export function createScoringEngine(
     let score: number | null = null;
 
     if (mode === 'objective') {
-      // Fastest path: precomputed absolute objective (no personalization).
+      // Infra-only: city index is rebuilt from daily_life weights, never stale s_living.
       const h3 = String(p.h3 ?? p.h3_index ?? '');
       const fromIndex = h3 ? cityIndex.byH3.get(h3) : undefined;
       score = fromIndex !== undefined
         ? fromIndex
-        : (num(p.s_objective) ?? num(p.s_living) ?? locationFor(p).objectiveScore);
+        : locationFor(p).objectiveScore;
     } else if (mode === 'city_percentile') {
       score = resolveCityPercentile(p, cityIndex);
     } else if (typeof mode === 'string' && mode.startsWith('pillar:')) {
@@ -524,7 +482,7 @@ export function createScoringEngine(
   function closestMatchMessage(): string | null {
     if (passingCount > 0) return null;
     if (!ctx.maxMonthlyBudget) return null;
-    return 'Keine Viertel im Budget — Living Score trotzdem farbig (gedimmt).';
+    return 'Keine Viertel im Budget — Infrastruktur trotzdem farbig (gedimmt).';
   }
 
   function applyPreset(preset: Record<string, number> | string) {

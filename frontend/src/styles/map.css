@@ -1,0 +1,30 @@
+/* Map canvas, MapLibre chrome, centre/destination markers. */
+
+#map { position: absolute; inset: 0; }
+
+.maplibregl-ctrl-top-right {
+  top: calc(var(--topbar-h) + 8px);
+}
+
+/* --- centre markers ------------------------------------------------------ */
+.center-marker {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: rgba(26, 107, 138, 0.55);
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(20, 30, 50, 0.4);
+  cursor: help;
+}
+.center-marker.is-anchor {
+  background: rgba(214, 69, 69, 0.75);
+  border-color: #fff;
+}
+.center-marker.is-anchor.is-main {
+  width: 20px;
+  height: 20px;
+  background: #d64545;
+  border-width: 3px;
+  box-shadow: 0 2px 8px rgba(20, 30, 50, 0.5);
+}
+

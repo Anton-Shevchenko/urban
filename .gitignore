@@ -2,19 +2,20 @@
 .venv/
 __pycache__/
 *.pyc
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
 
-# Pipeline cache (regenerable). The final frontend/public/data/hexes.geojson IS committed
-# so the site works without re-running the pipeline.
-data/cache/
-
-# Per-city generated data (regenerable on demand by the backend, can be large).
-data/cities/
-
-# SQLite city store (regenerable from data/cities/*/hexes.geojson)
-data/wohnindex.db
-data/*.db-journal
-data/*.db-wal
-data/*.db-shm
+# Data-service generated artifacts. Bundled München GeoJSON lives in
+# frontend/public/data/hexes.geojson so the map works without a pipeline run.
+microservices/data/data/cache/
+microservices/data/data/cities/
+microservices/data/data/gtfs/
+microservices/data/data/avm/
+microservices/data/data/wohnindex.db
+microservices/data/data/*.db-journal
+microservices/data/data/*.db-wal
+microservices/data/data/*.db-shm
 
 # Node
 node_modules/

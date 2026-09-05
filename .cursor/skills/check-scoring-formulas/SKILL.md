@@ -1,10 +1,10 @@
 ---
 name: check-scoring-formulas
 description: >-
-  Reads Living Score formulas and weights before any scoring work. Use when
-  changing or discussing living score, pillars, weights, PRESETS, daily-life
-  groups, housing value, walk bands, map paint thresholds, or anything under
-  frontend/src/scoring/.
+  Reads Living Score contracts before any scoring work. Use when changing or
+  discussing living score, pillars, weights, PRESETS, daily-life groups,
+  housing value, walk bands, map paint thresholds, metrics, or anything under
+  frontend/src/scoring/ or contracts/.
 ---
 
 # Check Scoring Formulas First
@@ -13,22 +13,25 @@ description: >-
 
 Before any other file reads, searches, or edits related to scoring:
 
-1. **Read** `/Users/antonshevchenko/Projects/urban/frontend/src/scoring/formulas.ts` in full (or enough to cover the relevant exports).
-2. Treat that file as the **source of truth** for weights, pillars, PRESETS, overlays, and short-circuit behavior.
-3. Only after that, inspect callers, UI, pipeline fields, or tests.
+1. **Read** `contracts/scoring.json` (objective weights, daily-life groups, walk bands).
+2. **Read** `contracts/metrics.json` (pipeline steps, metric ids, labels, hex fact sheet).
+3. Treat those JSON files as the **source of truth**. Generated views live in:
+   - `microservices/data/pipeline/generated/contract.py`
+   - `frontend/src/scoring/generated/contract.ts`
+   - `gen/contract/contract.go`
+4. `frontend/src/scoring/formulas.ts` holds **PRESETS / personal match only**. Do not put objective weights there.
+5. Only after that, inspect callers, UI, pipeline fields, or tests.
 
 ## What to verify when reading
 
-- `LIVING_WEIGHTS` / `PILLAR_KEYS` and that default weights sum to 1
-- Pillar meanings and pipeline field names in the file header
+- `objective_weights` in `scoring.json` sum to 1
+- Pillar ids match `metrics.json` metrics with `kind: pillar`
 - Walk-minute bands and daily-life group weights
-- Housing-value composition and `affordability_focus` behavior
-- `PRESETS` renormalisation and optional `dl_*` multipliers
-- `ABSOLUTE_PAINT_PILLAR_THRESHOLD` and related paint rules
-- When `livingScore` short-circuits to precomputed `s_living`
+- Housing-value composition and `affordability_focus` behavior (in `formulas.ts` PRESETS)
+- After edits: `python contracts/codegen.py` and `make contract-check`
 
 ## After the read
 
-- Prefer changing tunables in `formulas.ts` over duplicating weights elsewhere
-- If other code disagrees with `formulas.ts`, update the other code (or ask before changing the formulas)
-- Cite concrete exports/constants from `formulas.ts` when explaining scoring behavior
+- Prefer changing tunables in `contracts/scoring.json` / `contracts/metrics.json`
+- If other code disagrees with the generated contract, update the other code
+- Cite concrete keys from the JSON contracts when explaining scoring behavior

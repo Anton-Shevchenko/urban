@@ -1,0 +1,101 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  go:
+    name: Go
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache-dependency-path: |
+            gateway/go.sum
+            microservices/hex/go.sum
+            microservices/llm/go.sum
+            gen/go.sum
+            pkg/go.sum
+      - name: Vet
+        run: go vet ./gateway/... ./microservices/hex/... ./microservices/llm/... ./gen/... ./pkg/...
+      - name: Test
+        run: go test ./gateway/... ./microservices/hex/... ./microservices/llm/... ./gen/... ./pkg/...
+
+  proto-drift:
+    name: Proto stubs up to date
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+      - name: Install protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          version: "27.3"
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install protoc-gen-go plugins
+        run: |
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+      - name: Regenerate and diff
+        run: make proto-check
+
+  python:
+    name: Python
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e "./microservices/data[dev]"
+      - name: Lint
+        run: ruff check microservices/data contracts/codegen.py
+      - name: Test
+        working-directory: microservices/data
+        run: python -m pytest
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install
+        run: npm --prefix frontend ci
+      - name: Lint
+        run: npm --prefix frontend run lint
+      - name: Typecheck and build
+        run: npm --prefix frontend run build
+      - name: Test
+        run: npm --prefix frontend test
+
+  contract-drift:
+    name: Contract codegen up to date
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Regenerate and diff
+        run: |
+          python contracts/codegen.py
+          git diff --exit-code -- contracts frontend/src/scoring/generated gen/contract

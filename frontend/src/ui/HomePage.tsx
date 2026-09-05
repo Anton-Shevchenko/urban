@@ -3,13 +3,12 @@ import type { FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   apiUnavailableMessage,
-  ensureApiBase,
   fetchCities,
-  generateCity,
-  pollUntilReady,
+  isAbortError,
   resetApiBase,
   type CityListItem,
 } from '../api/client';
+import { resolveCityByQuery } from '../api/city';
 import { PILLAR_LABELS, PILLAR_KEYS } from '../scoring/engine';
 import { useTheme } from '../hooks/useTheme';
 import { ThemeToggle } from './ThemeToggle';
@@ -25,15 +24,7 @@ const CITY_TYPE_LABELS: Record<string, string> = {
 const DATA_SOURCES = [
   {
     title: 'OpenStreetMap',
-    text: 'Alltagsorte, Wege, Grünflächen und Straßennetz — die Basis für Gehqualität und Versorgung.',
-  },
-  {
-    title: 'Zensus 2022',
-    text: 'Bevölkerungsdichte und Wohnstruktur für urbanen Kontext und Wohnwert.',
-  },
-  {
-    title: 'GTFS / Mobilithek',
-    text: 'ÖPNV-Angebot und Erreichbarkeit ohne Auto — wo Fahrpläne verfügbar sind.',
+    text: 'Läden, Cafés, Ärzte, Schulen und weitere Alltagsorte — die Basis für den Infrastruktur-Score.',
   },
 ];
 
@@ -111,21 +102,12 @@ export function HomePage() {
     }
 
     setSearching(true);
-    setSearchStatus({ msg: `Suche „${query}" …` });
+    setSearchStatus({ msg: `Suche „${query}“ …` });
     try {
-      resetApiBase();
-      const base = await ensureApiBase();
-      if (base === null) throw new Error(apiUnavailableMessage());
-      const data = await generateCity(query);
-      const slug = data.slug;
-      if (!slug) throw new Error('Keine Stadt-ID vom Server erhalten');
-      const name = data.meta?.name || data.name || query;
-      if (data.status !== 'ready') {
-        setSearchStatus({ msg: `Erzeuge Karte für ${name} …` });
-        await pollUntilReady(slug, name, (msg) => setSearchStatus({ msg }));
-      }
-      navigate(`/city/${encodeURIComponent(slug)}`);
+      const city = await resolveCityByQuery(query, (msg) => setSearchStatus({ msg }));
+      navigate(`/city/${encodeURIComponent(city.slug)}`);
     } catch (err) {
+      if (isAbortError(err)) return;
       setSearchStatus({
         msg: err instanceof Error ? err.message : 'Suche fehlgeschlagen',
         error: true,
@@ -148,10 +130,10 @@ export function HomePage() {
         <div className="home-hero-bg" aria-hidden />
         <div className="home-hero-inner">
           <p className="home-hero-brand">Wohnindex</p>
-          <h1 className="home-hero-title">Wie gut lässt sich hier ohne Auto leben?</h1>
+          <h1 className="home-hero-title">Wie gut ist die Infrastruktur hier?</h1>
           <p className="home-hero-lead">
-            15-Minuten-Living-Score für deutsche Städte — Alltag, Gehqualität, Grün, ÖPNV und mehr
-            auf einer Karte.
+            Infrastruktur-Score für deutsche Städte — Läden, Cafés, Ärzte, Schulen und mehr in
+            Gehweite auf einer Karte.
           </p>
           <div className="home-hero-cta">
             <a href="#staedte" className="home-btn home-btn-primary">
@@ -168,12 +150,12 @@ export function HomePage() {
         <header className="home-section-head">
           <h2>Was steckt in den Daten</h2>
           <p>
-            Jede Stadt wird in Hexagone zerlegt. Daraus entsteht ein Living Score von 0–100 — gewichtet
-            nach dem, was dir wichtig ist.
+            Jede Stadt wird in Hexagone zerlegt. Daraus entsteht ein Infrastruktur-Score von 0–100 —
+            Läden, Cafés, Ärzte, Schulen und weitere Alltagsorte in Gehweite.
           </p>
         </header>
 
-        <ul className="home-pillars" aria-label="Living-Score-Metriken">
+        <ul className="home-pillars" aria-label="Infrastruktur-Metriken">
           {PILLAR_KEYS.map((key) => (
             <li key={key}>
               <span>{PILLAR_LABELS[key as keyof typeof PILLAR_LABELS] || key}</span>

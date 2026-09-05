@@ -1,0 +1,16 @@
+**/*_test.go
+**/testdata
+**/.git
+**/__pycache__
+**/*.pyc
+*.egg-info
+.venv
+tests
+data/cities
+data/cache
+data/gtfs
+data/avm
+data/*.db
+data/*.db-journal
+data/*.db-wal
+data/*.db-shm

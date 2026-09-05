@@ -1,0 +1,33 @@
+{
+  "type": "FeatureCollection",
+  "meta": { "name": "Teststadt", "slug": "fixture" },
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "h3": "891f8d732cbffff",
+        "s_living": 72.5,
+        "s_daily_life": 80,
+        "s_walk": 70,
+        "s_green": 65,
+        "s_transit": 88,
+        "s_center": 60,
+        "s_quiet": 55,
+        "s_housing_value": 40,
+        "dn_supermarket_min": 4,
+        "dn_school_min": 8,
+        "dn_doctor_min": 12,
+        "rent_eur_m2": 14.2,
+        "voi_class": "hidden_gem",
+        "voi_explain": "gute Lage, moderate Miete"
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "h3": "891f8d732c3ffff",
+        "s_living": 41
+      }
+    }
+  ]
+}

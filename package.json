@@ -4,8 +4,9 @@
   "type": "module",
   "scripts": {
     "test": "npm --prefix frontend test",
+    "lint": "npm --prefix frontend run lint",
+    "typecheck": "npm --prefix frontend exec tsc -b",
     "dev:frontend": "npm --prefix frontend run dev",
-    "build:frontend": "npm --prefix frontend run build",
-    "monte-carlo": "node scripts/profile_monte_carlo.mjs"
+    "build:frontend": "npm --prefix frontend run build"
   }
 }

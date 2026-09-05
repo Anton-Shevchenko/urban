@@ -1,0 +1,74 @@
+package chatprompt
+
+import (
+	"strings"
+	"testing"
+
+	hexv1 "urban/gen/hex/v1"
+)
+
+func TestBuildIncludesFactsOmitsEmpty(t *testing.T) {
+	living := 72.5
+	h := &hexv1.Hex{
+		H3:          "891f8d732cbffff",
+		CitySlug:    "fixture",
+		CityName:    "Teststadt",
+		LivingScore: &living,
+		Pillars:     map[string]float64{"transit": 88},
+		WalkMinutes: map[string]float64{"supermarket": 4},
+	}
+	msgs := Build(h, "Wie ist der ÖPNV?", nil)
+	if len(msgs) < 2 {
+		t.Fatalf("got %d messages", len(msgs))
+	}
+	if msgs[0].Role != "system" || !strings.Contains(msgs[0].Content, "Living Score") {
+		t.Fatalf("system prompt: %q", msgs[0].Content)
+	}
+	facts := msgs[1].Content
+	if !strings.HasPrefix(facts, "Hexagon facts (JSON):\n") {
+		t.Fatalf("facts prefix: %s", facts)
+	}
+	if !strings.Contains(facts, "891f8d732cbffff") || !strings.Contains(facts, "transit") {
+		t.Fatalf("facts missing fields: %s", facts)
+	}
+	if strings.Contains(facts, "voiClass") || strings.Contains(facts, "voi_class") {
+		t.Fatalf("empty voi should be omitted: %s", facts)
+	}
+	last := msgs[len(msgs)-1]
+	if last.Role != "user" || last.Content != "Wie ist der ÖPNV?" {
+		t.Fatalf("last message %+v", last)
+	}
+}
+
+func TestPromptVersionIsStamped(t *testing.T) {
+	if Version != "v2" {
+		t.Fatalf("Version = %q, want v2", Version)
+	}
+	if !strings.Contains(System, "Living Score") {
+		t.Fatalf("system prompt missing grounding rules: %q", System)
+	}
+	if !strings.Contains(System, "Do not invent") {
+		t.Fatalf("system prompt missing no-invention rule: %q", System)
+	}
+	if !strings.Contains(System, "Always answer in English") {
+		t.Fatalf("system prompt missing English rule: %q", System)
+	}
+}
+
+func TestBuildKeepsRecentHistory(t *testing.T) {
+	h := &hexv1.Hex{H3: "abc", CitySlug: "x", CityName: "Y"}
+	hist := []Turn{
+		{Role: "user", Content: "q1"},
+		{Role: "assistant", Content: "a1"},
+		{Role: "user", Content: "q2"},
+		{Role: "assistant", Content: "a2"},
+	}
+	msgs := Build(h, "q3", hist)
+	joined := ""
+	for _, m := range msgs {
+		joined += m.Role + ":" + m.Content + "\n"
+	}
+	if !strings.Contains(joined, "q2") || !strings.Contains(joined, "q3") {
+		t.Fatalf("history not applied:\n%s", joined)
+	}
+}

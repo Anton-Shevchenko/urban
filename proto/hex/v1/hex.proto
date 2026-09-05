@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package hex.v1;
+
+option go_package = "urban/gen/hex/v1;hexv1";
+
+service HexService {
+  rpc GetHex(GetHexRequest) returns (Hex);
+}
+
+message GetHexRequest {
+  string city_slug = 1;
+  string h3 = 2;
+}
+
+// Compact fact sheet for one H3 cell — not the full GeoJSON property bag.
+message Hex {
+  string h3 = 1;
+  string city_slug = 2;
+  string city_name = 3;
+  optional double living_score = 4;
+  map<string, double> pillars = 5;
+  map<string, double> walk_minutes = 6;
+  optional double rent_eur_m2 = 7;
+  string voi_class = 8;
+  string voi_explain = 9;
+}
