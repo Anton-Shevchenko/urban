@@ -199,3 +199,8 @@ def test_pipeline_registry_matches_run_steps():
     assert [name for name, _ in run.STEPS] == [step["label"] for step in generated.PIPELINE_STEPS]
     assert run.WAVES == [list(wave) for wave in generated.PIPELINE_WAVES]
     assert cache_status._REQUIRED_CACHE == set(generated.REQUIRED_CACHE_FILES)
+
+
+def test_map_view_metrics_are_cycleways_first():
+    assert generated.MAP_VIEW_METRICS == ("cycleways",)
+    assert generated.METRIC_SCORE_PROPS["cycleways"] == "s_cycleways"

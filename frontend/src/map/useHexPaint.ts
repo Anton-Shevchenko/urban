@@ -1,9 +1,10 @@
 import { useEffect, useRef, type MutableRefObject, type RefObject } from 'react';
 import type { FeatureCollection } from 'geojson';
 import type { Map as MapLibreMap } from 'maplibre-gl';
-import { isPrimaryPaintView, serializeScoringContext } from '../scoring/hexPaint';
+import { isPrimaryPaintView, isStreetOverlayView, serializeScoringContext } from '../scoring/hexPaint';
 import type { PipelinePoint } from '../scoring/types';
 import type { HexPaintSnapshot } from '../wohnindex/types';
+import { itemBelongsToCity } from '../wohnindex/compareSnapshot';
 import { applyHexLayers, applyHexOverlays, writeLiveScoreProps } from './applyPaint';
 import { hexFillColor, hexFillOpacity } from './layerConfig';
 import type { HexPaintRequest, HexPaintResult } from './hexPaintWorker.types';
@@ -16,14 +17,23 @@ type PaintBuffers = {
 };
 
 function overlayState(s: HexPaintSnapshot) {
+  const paintMapView = s.paintMapView ?? s.mapView;
   const selectedH3s = s.comparison
-    .filter((i) => i.cityName === s.cityName)
+    .filter((i) => itemBelongsToCity(i, s.citySlug, s.cityName))
     .map((i) => i.h3);
   const chatH3 = s.chatHex && s.chatHex.citySlug === s.citySlug ? s.chatHex.h3 : '__none__';
-  return { showHiddenGems: s.showHiddenGems, selectedH3s, chatH3 };
+  return {
+    showHiddenGems: s.showHiddenGems,
+    selectedH3s,
+    chatH3,
+    hideHexGrid: isStreetOverlayView(paintMapView),
+  };
 }
 
 function paintExpressions(s: HexPaintSnapshot, paintMapView: string) {
+  if (isStreetOverlayView(paintMapView)) {
+    return { fillColor: 'rgba(0,0,0,0)', fillOpacity: 0, passingCount: s.engine.getPassingCount() };
+  }
   const primary = isPrimaryPaintView(paintMapView);
   const fillColor = hexFillColor(
     primary,
@@ -73,8 +83,8 @@ export function useHexPaint(opts: {
     }
     writeLiveScoreProps(fc, s.features, buffers.scores, buffers.passed);
     const { fillColor, fillOpacity, passingCount } = paintExpressions(s, paintMapView);
-    const created = applyHexLayers(map, fc, fillColor, fillOpacity);
-    if (created === 'created') onLayersCreatedRef.current(map);
+    applyHexLayers(map, fc, fillColor, fillOpacity);
+    onLayersCreatedRef.current(map);
     applyHexOverlays(map, overlayState(s));
     lastStyleEpochRef.current = styleEpochRef.current;
     let done = false;

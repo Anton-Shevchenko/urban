@@ -13,11 +13,23 @@ export type Destination = { lat: number; lng: number; label: string; weight: num
 
 export type CompareItem = {
   id: string;
+  citySlug: string;
   cityName: string;
   h3: string;
   props: Record<string, unknown>;
   sizeM2: number;
   pricePerM2: number | null;
+  lng: number | null;
+  lat: number | null;
+  /** Percentile in the city where the hex was pinned, not the city currently on the map. */
+  cityPercentile: number | null;
+};
+
+export type CompareFocus = {
+  citySlug: string;
+  h3: string;
+  lng: number | null;
+  lat: number | null;
 };
 
 export type ChatHex = {
@@ -25,6 +37,7 @@ export type ChatHex = {
   citySlug: string;
   cityName: string;
   livingScore: number | null;
+  props?: Record<string, unknown>;
 };
 
 export type CityMeta = {

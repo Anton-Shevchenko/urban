@@ -164,11 +164,17 @@ func (s *Server) getHex(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(body)
 }
 
+type chatCompareRef struct {
+	CitySlug string `json:"city_slug"`
+	H3       string `json:"h3"`
+}
+
 type chatRequest struct {
 	CitySlug string            `json:"city_slug"`
 	H3       string            `json:"h3"`
 	Message  string            `json:"message"`
 	History  []chatprompt.Turn `json:"history"`
+	Compare  []chatCompareRef  `json:"compare"`
 }
 
 func (s *Server) chat(w http.ResponseWriter, r *http.Request) {
@@ -194,7 +200,8 @@ func (s *Server) chat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	msgs := chatprompt.Build(hexCell, req.Message, req.History)
+	peers := s.loadCompareHexes(ctx, r, req.CitySlug, req.H3, req.Compare)
+	msgs := chatprompt.Build(hexCell, req.Message, req.History, peers...)
 	stream, err := s.LLM.CompleteStream(ctx, &llmv1.CompleteRequest{Messages: msgs})
 	if err != nil {
 		writeGRPCError(w, r, err)
@@ -236,6 +243,45 @@ func (s *Server) chat(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+}
+
+const maxComparePeers = 5
+
+func (s *Server) loadCompareHexes(
+	ctx context.Context,
+	r *http.Request,
+	focusCity, focusH3 string,
+	refs []chatCompareRef,
+) []*hexv1.Hex {
+	focusKey := focusCity + "\x00" + focusH3
+	seen := map[string]struct{}{focusKey: {}}
+	out := make([]*hexv1.Hex, 0, maxComparePeers)
+	log := logger(r)
+	for _, ref := range refs {
+		if len(out) >= maxComparePeers {
+			break
+		}
+		city := strings.TrimSpace(ref.CitySlug)
+		h3 := strings.TrimSpace(ref.H3)
+		if city == "" || h3 == "" {
+			continue
+		}
+		key := city + "\x00" + h3
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		hexCell, err := s.Hex.GetHex(ctx, &hexv1.GetHexRequest{CitySlug: city, H3: h3})
+		if err != nil {
+			log.Info("compare hex skipped", "city_slug", city, "h3", h3, "err", err)
+			continue
+		}
+		if hexCell == nil {
+			continue
+		}
+		out = append(out, hexCell)
+	}
+	return out
 }
 
 func writeSSEDone(w http.ResponseWriter, flusher http.Flusher) {

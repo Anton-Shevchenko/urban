@@ -12,6 +12,7 @@ import { resolveCityByQuery } from '../api/city';
 import { PILLAR_LABELS, PILLAR_KEYS } from '../scoring/engine';
 import { useTheme } from '../hooks/useTheme';
 import { ThemeToggle } from './ThemeToggle';
+import { ComparePanel } from './ComparePanel';
 
 const CITY_TYPE_LABELS: Record<string, string> = {
   METROPOLIS: 'Metropole',
@@ -172,6 +173,8 @@ export function HomePage() {
           ))}
         </div>
       </section>
+
+      <ComparePanel variant="home" />
 
       <section id="staedte" className="home-section home-cities">
         <header className="home-section-head">

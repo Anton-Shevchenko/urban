@@ -79,6 +79,16 @@ Absolute Kaltmieten-Benchmark (nicht stadt-relativ) → `s_housing_affordability
 
 Nähe zu (polyzentrischen) Zentren → `s_center`.
 
+### Kartenansicht (Overlays)
+
+Zusätzlich zum Infrastruktur-Score kann die Karte **Overlay-Metriken** einfärben.
+Die erste (und vorerst einzige) Option: **Radwege** — nur baulich getrennte
+Wege aus OSM (`highway=cycleway`, `cycleway=track`). Radfahrstreifen auf der
+Fahrbahn zählen nicht. Overlay-Scores gehen **nicht** in den Living Score ein.
+
+Registriert in [`contracts/metrics.json`](contracts/metrics.json) mit
+`"map_view": true`.
+
 ## Profile
 
 Auf diesem Branch sind alle Profile Kopien der objektiven Gewichte (100 % Alltag).

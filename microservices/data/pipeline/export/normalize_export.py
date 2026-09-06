@@ -20,6 +20,7 @@ from pipeline.export.score_scales import (
     center_polycentric_exponential,
     centrality_index,
     city_normalize,
+    cycleway_score,
     density_sweet_spot_score,
     green_composite_strict,
     green_quality_score,
@@ -199,6 +200,7 @@ def build(ctx: CityContext) -> gpd.GeoDataFrame:
         config.HOUSING_FILE,
         config.WALKING_QUALITY_FILE,
         config.URBAN_FORM_FILE,
+        config.CYCLEWAYS_FILE,
     ):
         extra = _optional_parquet(ctx, file_key)
         if extra is not None:
@@ -338,6 +340,12 @@ def build(ctx: CityContext) -> gpd.GeoDataFrame:
     if "s_urban_form" not in df.columns:
         df["s_urban_form"] = _derive_urban_form(df)
 
+    if "s_cycleways" not in df.columns and "cycleway_km_per_km2" in df.columns:
+        dist = df["nearest_cycleway_m"] if "nearest_cycleway_m" in df.columns else pd.Series(1500.0, index=df.index)
+        df["s_cycleways"] = cycleway_score(df["cycleway_km_per_km2"].fillna(0), dist.fillna(1500.0))
+    if "s_cycleways" in df.columns:
+        df["s_cycleways"] = df["s_cycleways"].clip(0, 100).round(1)
+
     if "rent_eur_m2" in df.columns:
         df["s_rent_relative_city"] = rent_percentile_score(df["rent_eur_m2"])
         df["s_rent_kalt_benchmark"] = rent_kalt_lenient(df["rent_eur_m2"])
@@ -401,6 +409,9 @@ _PATTERN_PREFIXES = ("dn_", "dl_", "center_min_", "wq_", "uf_")
 _ROUND = {
     "transport_score": 3,
     "green_dist_m": 0,
+    "cycleway_length_m": 1,
+    "nearest_cycleway_m": 0,
+    "cycleway_km_per_km2": 3,
     "voi_adjusted_price_gap": 4,
     "voi_price_gap": 4,
     "voi_local_advantage": 3,
@@ -431,7 +442,7 @@ _STRING_KEYS = frozenset(
 def _jsonify(key: str, val: object) -> object:
     if key in _STRING_KEYS or isinstance(val, str):
         return str(val)
-    if key in _INT_KEYS:
+    if key in _INT_KEYS or (key.startswith("dn_") and key.endswith("_n")):
         return int(val)
     number = float(val)
     digits = _ROUND.get(key, 1)
@@ -620,6 +631,9 @@ def export(ctx: CityContext, df: gpd.GeoDataFrame) -> None:
     with open(ctx.meta_json, "w", encoding="utf-8") as fh:
         json.dump(meta, fh)
     _write_sidecars(ctx, df, len(features))
+    from pipeline.factors import cycleways as cycleways_overlay
+
+    cycleways_overlay.write_overlay_geojson(ctx)
     size_kb = out_path.stat().st_size / 1024
     log(STEP, f"exported {len(features)} features -> {out_path} ({size_kb:.0f} KB)")
 

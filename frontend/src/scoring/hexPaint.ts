@@ -30,6 +30,10 @@ export function isPrimaryPaintView(paintMapView: string | null | undefined): boo
   return !paintMapView || PRIMARY_PAINT_VIEWS.has(paintMapView);
 }
 
+export function isStreetOverlayView(paintMapView: string | null | undefined): boolean {
+  return paintMapView === 'cycleways';
+}
+
 /** Drop non-cloneable Maps so the context can be posted to a worker. */
 export function serializeScoringContext(ctx: ScoringContext): ScoringContext {
   return {

@@ -141,6 +141,15 @@
       "required_cache": true
     },
     {
+      "id": "cycleways",
+      "label": "factor: cycleways",
+      "module": "pipeline.factors.cycleways",
+      "func": "main",
+      "wave": 4,
+      "cache_file": "factor_cycleways.parquet",
+      "required_cache": false
+    },
+    {
       "id": "walking_quality",
       "label": "factor: walking quality",
       "module": "pipeline.factors.walking_quality",
@@ -333,6 +342,21 @@
       "type": "objective_positive",
       "factor": "rents",
       "meta": { "source": "mixed", "confidence": 0.5, "year": 2026 }
+    },
+    {
+      "id": "cycleways",
+      "kind": "overlay",
+      "score_key": "s_cycleways",
+      "label": "Radwege",
+      "type": "objective_positive",
+      "factor": "cycleways",
+      "map_view": true,
+      "meta": {
+        "source": "osm_cycleway_track",
+        "confidence": 0.7,
+        "year": 2026,
+        "note": "Nur baulich getrennte Radwege (highway=cycleway, cycleway=track). Kein Radfahrstreifen."
+      }
     }
   ]
 }

@@ -1,8 +1,10 @@
 import { useContext } from 'react';
-import { CompareContext, requireWohnIndexCtx, type CompareSlice } from '../contexts';
+import { CompareContext, type CompareSlice } from '../contexts';
 
 export type { CompareSlice };
 
 export function useCompare(): CompareSlice {
-  return requireWohnIndexCtx(useContext(CompareContext), 'useCompare');
+  const value = useContext(CompareContext);
+  if (value == null) throw new Error('useCompare must be used within CompareSessionProvider');
+  return value;
 }

@@ -12,6 +12,7 @@ export {
   SCORE_PROPS,
   FACTOR_LABELS,
   PILLAR_LABELS,
+  MAP_VIEW_METRICS,
   percentile,
   thresholdForImportance,
   computeFactorPercentiles,

@@ -12,6 +12,7 @@ import {
   DAILY_NEED_CATS,
   FACTOR_LABELS,
   SCORE_PROPS,
+  MAP_VIEW_METRICS,
 } from '../scoring/engine';
 import {
   DEFAULT_MATCH_PREFS,
@@ -24,6 +25,7 @@ import { summarizeScores, type ScoreDistribution } from '../scoring/histogram';
 import { ensureApiBase, fetchDestMatrix, isAbortError } from '../api/client';
 import { loadOrGenerateCity } from '../api/city';
 import {
+  buildMapViewOptions,
   detectExtendedMetrics,
   detectHasRent,
   factorScoreSpread,
@@ -31,10 +33,10 @@ import {
   normalizeLegacyProps,
   readDebugFlag,
 } from './helpers';
+import { snapshotHexProps } from './compareSnapshot';
 import type {
   ChatHex,
   CityMeta,
-  CompareItem,
   Destination,
   PaintStats,
   UseWohnIndexOptions,
@@ -92,11 +94,14 @@ export function useWohnIndexStore(options: UseWohnIndexOptions = {}) {
   const [customDestMatrix, setCustomDestMatrix] = useState<Record<string, Record<string, number>>>(
     {},
   );
-  const [comparison, setComparison] = useState<CompareItem[]>(() => loadJson(STORAGE.compare, []));
   const [chatHex, setChatHex] = useState<ChatHex | null>(null);
   const [chatOpen, setChatOpen] = useState(true);
   const [mapView, setMapViewState] = useState(() => {
-    // Infra-only branch: always paint Infrastruktur (objective ≡ daily_life).
+    try {
+      const v = localStorage.getItem(STORAGE.mapView);
+      if (v === 'objective' || v === 'personal_match' || v === 'city_percentile') return v;
+      if (v && MAP_VIEW_METRICS.includes(v)) return v;
+    } catch { /* */ }
     return 'objective';
   });
   const [showHiddenGems, setShowHiddenGemsState] = useState(() => {
@@ -311,6 +316,9 @@ export function useWohnIndexStore(options: UseWohnIndexOptions = {}) {
   const setMapView = useCallback(
     (v: string) => {
       setMapViewState(v);
+      try {
+        localStorage.setItem(STORAGE.mapView, v);
+      } catch { /* */ }
       scheduleScoringCommit();
     },
     [scheduleScoringCommit],
@@ -391,6 +399,7 @@ export function useWohnIndexStore(options: UseWohnIndexOptions = {}) {
       const keepMode = mapView === 'personal_match' || mapView === 'city_percentile'
         || mapView.startsWith('pillar:')
         || ['daily_life', 'walk', 'green', 'transit', 'centrality', 'quiet', 'housing_affordability', 'housing_value'].includes(mapView)
+        || MAP_VIEW_METRICS.includes(mapView)
         ? mapView
         : 'objective';
       setMapViewState(keepMode);
@@ -451,6 +460,7 @@ export function useWohnIndexStore(options: UseWohnIndexOptions = {}) {
           || committedMapView === 'personal_match'
           || committedMapView === 'city_percentile'
           || committedMapView.startsWith('pillar:')
+          || MAP_VIEW_METRICS.includes(committedMapView)
           ? committedMapView
           : `pillar:${committedMapView === 'housing_value' ? 'housing_affordability' : committedMapView}`
     ) as ScoringContext['mapMetricMode'];
@@ -646,14 +656,6 @@ export function useWohnIndexStore(options: UseWohnIndexOptions = {}) {
 
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE.compare, JSON.stringify(comparison));
-    } catch {
-      /* */
-    }
-  }, [comparison]);
-
-  useEffect(() => {
-    try {
       localStorage.setItem(STORAGE.dailyNeeds, JSON.stringify(dailyNeedsCategories));
     } catch {
       /* */
@@ -738,12 +740,16 @@ export function useWohnIndexStore(options: UseWohnIndexOptions = {}) {
     [hasRent, destinations.length, hasExtendedMetrics, heatHasVariation, noiseHasVariation],
   );
 
-  const mapViewOptions = useMemo(() => {
-    const labels = FACTOR_LABELS as Record<string, string>;
-    return [
-      { value: 'objective', label: labels.daily_life || 'Infrastruktur' },
-    ];
-  }, []);
+  const mapViewOptions = useMemo(
+    () => buildMapViewOptions(FACTOR_LABELS as Record<string, string>),
+    [],
+  );
+
+  useEffect(() => {
+    if (!features.length) return;
+    if (mapViewOptions.some((o) => o.value === mapView)) return;
+    setMapView('objective');
+  }, [features.length, mapView, mapViewOptions, setMapView]);
 
   const debugReport = useMemo(() => {
     if (!debugMode || !features.length) return null;
@@ -839,72 +845,11 @@ export function useWohnIndexStore(options: UseWohnIndexOptions = {}) {
         citySlug,
         cityName,
         livingScore: Number.isFinite(living) ? living : null,
+        props: snapshotHexProps(p),
       });
       setChatOpen(true);
     },
     [citySlug, cityName],
-  );
-
-  const toggleCompare = useCallback(
-    (feature: Feature) => {
-      const p = feature.properties as Record<string, unknown>;
-      const id = `${cityName}:${p.h3}`;
-      setComparison((prev) => {
-        const idx = prev.findIndex((i) => i.id === id);
-        if (idx >= 0) return prev.filter((i) => i.id !== id);
-        const props: Record<string, unknown> = {};
-        [
-          's_living',
-          's_daily_life',
-          's_walk',
-          's_walking_quality',
-          's_transit',
-          's_green',
-          's_center',
-          's_quiet',
-          's_noise',
-          's_housing_value',
-          's_urban_form',
-          's_urban_activity',
-          's_daily_needs',
-          's_transit_service',
-          's_traffic_safety',
-          's_density',
-          'center_min',
-          'urban_activity',
-          'business_count',
-          'population_density',
-          'green_access',
-          'green_share_inside_500m',
-          'noise_db',
-          'dn_supermarket_min',
-          'dn_pharmacy_min',
-          'dn_restaurant_min',
-          'dl_food',
-          'dl_health',
-          'dl_education',
-          'dl_services',
-          'dl_restaurants_cafes',
-          'dl_other',
-          'rent_eur_m2',
-          'rent_confidence',
-        ].forEach((k) => {
-          if (p[k] != null) props[k] = p[k];
-        });
-        return [
-          ...prev,
-          {
-            id,
-            cityName,
-            h3: String(p.h3),
-            props,
-            sizeM2: DEFAULT_SIZE_M2,
-            pricePerM2: typeof p.rent_eur_m2 === 'number' ? p.rent_eur_m2 : null,
-          },
-        ];
-      });
-    },
-    [cityName],
   );
 
   const addDestination = useCallback((lat: number, lng: number) => {
@@ -945,10 +890,9 @@ export function useWohnIndexStore(options: UseWohnIndexOptions = {}) {
     setMaxMonthlyBudget,
     destinations,
     setDestinations,
-    comparison,
-    setComparison,
     chatHex,
     chatOpen,
+    setChatHex,
     setChatOpen,
     selectChatHex,
     mapView,
@@ -978,7 +922,6 @@ export function useWohnIndexStore(options: UseWohnIndexOptions = {}) {
     factorAvailable,
     applyPreset,
     runSearch,
-    toggleCompare,
     addDestination,
     IMPORTANCE_KEYS,
     PREF_KEYS,

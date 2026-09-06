@@ -4,6 +4,7 @@ import { voiBorderWidth, voiHighlightLevel } from '../scoring/valueOpportunity';
 import {
   CHAT_ID,
   LAYER_ID,
+  LINE_ID,
   SELECT_ID,
   SOURCE_ID,
   VOI_LINE_ID,
@@ -80,13 +81,17 @@ export function applyHexOverlays(
     showHiddenGems: boolean;
     selectedH3s: string[];
     chatH3: string;
+    hideHexGrid?: boolean;
   },
 ): void {
+  if (map.getLayer(LINE_ID)) {
+    map.setLayoutProperty(LINE_ID, 'visibility', opts.hideHexGrid ? 'none' : 'visible');
+  }
   if (map.getLayer(VOI_LINE_ID)) {
     map.setLayoutProperty(
       VOI_LINE_ID,
       'visibility',
-      opts.showHiddenGems ? 'visible' : 'none',
+      opts.hideHexGrid || !opts.showHiddenGems ? 'none' : 'visible',
     );
   }
   if (map.getLayer(SELECT_ID)) {

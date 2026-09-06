@@ -18,6 +18,7 @@ import {
   SCORE_METHOD_VERSION,
   SCORE_PROPS,
   WALK_MINUTE_BANDS,
+  MAP_VIEW_METRICS,
 } from './generated/contract';
 import { ACCESSIBILITY_BANDS, bandScore } from './normalization';
 import * as objective from './objective';
@@ -61,6 +62,11 @@ describe('generated contract matches contracts/scoring.json', () => {
   it('keeps SCORE_PROPS aligned with the metric registry', () => {
     expect(SCORE_PROPS.daily_life).toBe('s_daily_life');
     expect(SCORE_PROPS.housing_affordability).toBe('s_rent_kalt_benchmark');
+    expect(SCORE_PROPS.cycleways).toBe('s_cycleways');
+  });
+
+  it('lists cycleways as the first extra map-view overlay', () => {
+    expect(MAP_VIEW_METRICS).toEqual(['cycleways']);
   });
 });
 

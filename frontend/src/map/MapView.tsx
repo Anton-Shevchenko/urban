@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import maplibregl from 'maplibre-gl';
-import type { Map as MapLibreMap, MapLayerMouseEvent, Marker } from 'maplibre-gl';
-import type { Feature, FeatureCollection } from 'geojson';
+import type { Map as MapLibreMap, MapLayerMouseEvent, MapMouseEvent, Marker } from 'maplibre-gl';
+import type { FeatureCollection } from 'geojson';
 import { CFG } from '../scoring/constants';
-import { cssGradient } from '../scoring/color';
 import {
   useChat,
   useCityData,
@@ -16,11 +15,17 @@ import type { HexPaintSnapshot } from '../wohnindex/types';
 import { HexTooltip } from './HexTooltip';
 import { buildHexTooltipModel, type HexTooltipModel } from './hexTooltipModel';
 import { LAYER_ID } from './layerConfig';
+import { queryHexAtPoint, resolveQueriedHex } from './queryHex';
+import { useCyclewayOverlay } from './useCyclewayOverlay';
 import { useHexPaint } from './useHexPaint';
 
 type Props = {
   mapStyleUrl: string;
 };
+
+// Module-level so Vite HMR re-evaluates it and the map is recreated instead of
+// keeping a MapLibre instance that still has Shift-gated click / box-zoom.
+const MAP_GENERATION = Date.now();
 
 export function MapView({ mapStyleUrl }: Props) {
   const city = useCityData();
@@ -77,8 +82,13 @@ export function MapView({ mapStyleUrl }: Props) {
   const chatRef = useRef(chat);
   chatRef.current = chat;
 
-  const onHexMove = useRef((e: MapLayerMouseEvent) => {
+  const onHexMove = useRef<(e: MapLayerMouseEvent) => void>(() => {});
+  onHexMove.current = (e) => {
     const s = snapshotRef.current;
+    if ((s.paintMapView ?? s.mapView) === 'cycleways') {
+      setTooltip(null);
+      return;
+    }
     const model = buildHexTooltipModel(
       e,
       s.engine,
@@ -86,57 +96,73 @@ export function MapView({ mapStyleUrl }: Props) {
       s.showHiddenGems,
     );
     if (model) setTooltip(model);
-  });
+  };
 
-  const onHexClick = useRef((e: MapLayerMouseEvent) => {
+  const onHexClick = useRef<(e: MapMouseEvent) => void>(() => {});
+  onHexClick.current = (e) => {
     if (destRef.current.pickDestinationMode) return;
-    const f = e.features?.[0] as Feature | undefined;
+    const hit = queryHexAtPoint(e.target, e.point);
+    const f = resolveQueriedHex(hit, snapshotRef.current.features);
     if (!f) return;
-    const shift = Boolean((e.originalEvent as MouseEvent | undefined)?.shiftKey);
-    if (shift) {
-      compareRef.current.toggleCompare(f);
-      return;
-    }
+    const s = snapshotRef.current;
+    const loc = s.engine.locationScore?.(f.properties as never);
+    compareRef.current.addCompare(f, {
+      citySlug: s.citySlug,
+      cityName: s.cityName,
+      cityPercentile: loc?.cityPercentile ?? null,
+    });
     chatRef.current.selectChatHex(f);
-  });
+  };
 
   const bindLayerEvents = useRef((map: MapLibreMap) => {
     if (layerEventsBoundRef.current) return;
-    map.on('mousemove', LAYER_ID, onHexMove.current);
+    map.on('mousemove', LAYER_ID, (e) => onHexMove.current(e));
     map.on('mouseleave', LAYER_ID, () => setTooltip(null));
     map.on('mouseenter', LAYER_ID, () => {
       map.getCanvas().style.cursor = 'pointer';
     });
-    map.on('click', LAYER_ID, onHexClick.current);
     layerEventsBoundRef.current = true;
   });
 
   useEffect(() => {
-    if (!containerRef.current || mapRef.current) return;
+    const el = containerRef.current;
+    if (!el) return undefined;
+
     const map = new maplibregl.Map({
-      container: containerRef.current,
+      container: el,
       style: mapStyleUrl,
       center: CFG.center,
       zoom: CFG.zoom,
       attributionControl: false,
+      boxZoom: false,
+      dragRotate: false,
+      pitchWithRotate: false,
+      clickTolerance: 12,
     });
+    map.boxZoom.disable();
+    map.dragRotate.disable();
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
+    map.on('click', (e: MapMouseEvent) => {
+      if (destRef.current.pickDestinationMode) {
+        destRef.current.addDestination(e.lngLat.lat, e.lngLat.lng);
+        return;
+      }
+      onHexClick.current(e);
+    });
+    map.once('load', () => setStyleEpoch((n) => n + 1));
     mapRef.current = map;
     styleUrlRef.current = mapStyleUrl;
     layerEventsBoundRef.current = false;
 
-    map.on('click', (e) => {
-      if (destRef.current.pickDestinationMode) {
-        destRef.current.addDestination(e.lngLat.lat, e.lngLat.lng);
-      }
-    });
-
     return () => {
       map.remove();
-      mapRef.current = null;
+      if (mapRef.current === map) mapRef.current = null;
     };
+    // MAP_GENERATION is a module constant: Vite HMR re-runs this module and
+    // recreates the map so leftover Shift+click handlers cannot stick around.
+    // Style URL changes go through setStyle below, not a full remap.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [MAP_GENERATION]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -181,9 +207,17 @@ export function MapView({ mapStyleUrl }: Props) {
     onLayersCreated: (map) => bindLayerEvents.current(map),
   });
 
+  useCyclewayOverlay({
+    mapRef,
+    citySlug: city.citySlug,
+    paintMapView: mapView.paintMapView ?? mapView.mapView,
+    styleEpoch,
+  });
+
   useEffect(() => {
     const map = mapRef.current;
-    if (!map) return;
+    if (!map || city.loading) return;
+    if (compare.pendingFocus?.citySlug === city.citySlug) return;
     const bbox = city.meta.bbox;
     if (Array.isArray(bbox) && bbox.length === 4) {
       const [south, west, north, east] = bbox;
@@ -197,7 +231,18 @@ export function MapView({ mapStyleUrl }: Props) {
     } else if (city.meta.center) {
       map.flyTo({ center: [city.meta.center[1], city.meta.center[0]], zoom: CFG.zoom });
     }
-  }, [city.citySlug]);
+  }, [city.citySlug, city.loading, city.meta.bbox, city.meta.center, compare.pendingFocus]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || city.loading || city.features.length === 0) return;
+    const focus = compare.pendingFocus;
+    if (!focus || focus.citySlug !== city.citySlug) return;
+    if (focus.lng != null && focus.lat != null) {
+      map.flyTo({ center: [focus.lng, focus.lat], zoom: 14, duration: 900 });
+    }
+    compare.clearFocus();
+  }, [city.citySlug, city.loading, city.features.length, compare.pendingFocus, compare.clearFocus]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -238,11 +283,6 @@ export function MapView({ mapStyleUrl }: Props) {
       );
     });
   }, [dest.destinations]);
-
-  useEffect(() => {
-    const bar = document.getElementById('legend-bar');
-    if (bar) bar.style.background = cssGradient();
-  }, []);
 
   return (
     <>

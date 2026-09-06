@@ -1,9 +1,11 @@
 import { createContext, type Dispatch, type SetStateAction } from 'react';
 import type { Feature } from 'geojson';
 import type { ScoringEngine } from '../scoring/types';
+import type { CompareCityRef } from './compareSnapshot';
 import type {
   ChatHex,
   CityMeta,
+  CompareFocus,
   CompareItem,
   DebugReport,
   Destination,
@@ -43,7 +45,14 @@ export type DestinationsSlice = {
 export type CompareSlice = {
   comparison: CompareItem[];
   setComparison: Dispatch<SetStateAction<CompareItem[]>>;
-  toggleCompare: (feature: Feature) => void;
+  addCompare: (feature: Feature, city: CompareCityRef) => void;
+  isCompared: (citySlug: string, h3: string, cityName?: string) => boolean;
+  pendingFocus: CompareFocus | null;
+  requestFocus: (item: CompareItem) => void;
+  clearFocus: () => void;
+  pendingChatPrompt: string | null;
+  requestChatPrompt: (message: string) => void;
+  clearChatPrompt: () => void;
 };
 
 export type MapViewSlice = {
@@ -60,6 +69,7 @@ export type ChatSlice = {
   chatOpen: boolean;
   setChatOpen: (open: boolean) => void;
   selectChatHex: (feature: Feature) => void;
+  setChatHex: Dispatch<SetStateAction<ChatHex | null>>;
 };
 
 export type PaintSlice = {

@@ -1,5 +1,5 @@
 import type { Feature, FeatureCollection } from 'geojson';
-import { SCORE_PROPS } from '../scoring/engine';
+import { MAP_VIEW_METRICS, SCORE_PROPS } from '../scoring/engine';
 import type { CityMeta } from './types';
 
 export function readDebugFlag(): boolean {
@@ -20,6 +20,16 @@ export function loadJson<T>(key: string, fallback: T): T {
     /* */
   }
   return fallback;
+}
+
+/** Kartenansicht entries. Overlays stay listed even when a city has no scores yet. */
+export function buildMapViewOptions(
+  labels: Record<string, string>,
+): { value: string; label: string }[] {
+  return [
+    { value: 'objective', label: labels.daily_life || 'Infrastruktur' },
+    ...MAP_VIEW_METRICS.map((id) => ({ value: id, label: labels[id] || id })),
+  ];
 }
 
 export function detectHasRent(geojson: FeatureCollection & { meta?: CityMeta }) {

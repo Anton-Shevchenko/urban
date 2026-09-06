@@ -6,6 +6,7 @@ GET  /api/cities            -> list already-generated (cached) cities
 POST /api/generate {q}      -> geocode + (re)use cache or start a background job
 GET  /api/status/{slug}     -> job/cache status for polling
 GET  /api/city/{slug}.geojson -> the generated hex GeoJSON
+GET  /api/city/{slug}/cycleways.geojson -> dedicated cycleway line overlay
 GET  /api/city/{slug}/stats   -> compact city-stats.json sidecar
 GET  /api/city/{slug}/hexes.parquet -> property table without geometry
 POST /api/destinations/matrix -> per-hex travel minutes to custom destinations
@@ -227,6 +228,14 @@ def city_geojson(slug: str):
         return FileResponse(path, media_type="application/geo+json")
     if text is not None:
         return Response(content=text, media_type="application/geo+json")
+    raise HTTPException(status_code=404, detail="not generated")
+
+
+@app.get("/api/city/{slug}/cycleways.geojson")
+def city_cycleways(slug: str):
+    path = _city_dir(slug) / config.CYCLEWAYS_GEOJSON_FILE
+    if path.exists():
+        return FileResponse(path, media_type="application/geo+json")
     raise HTTPException(status_code=404, detail="not generated")
 
 

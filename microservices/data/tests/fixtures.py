@@ -13,7 +13,7 @@ from pathlib import Path
 
 import geopandas as gpd
 import pandas as pd
-from shapely.geometry import Polygon
+from shapely.geometry import LineString, Polygon
 
 from pipeline import config
 from pipeline.city import CityContext
@@ -196,6 +196,35 @@ def build_fixture_city(tmp_path: Path, slug: str = "testkirchen") -> CityContext
             "uf_activity": ramp(20, 92),
         }
     ).to_parquet(cache / config.URBAN_FORM_FILE)
+
+    pd.DataFrame(
+        {
+            "h3_index": h3,
+            "cycleway_length_m": ramp(0, 420),
+            "cycleway_km_per_km2": ramp(0.0, 4.2),
+            "nearest_cycleway_m": ramp(20, 1400),
+            "s_cycleways": ramp(8, 92),
+        }
+    ).to_parquet(cache / config.CYCLEWAYS_FILE)
+
+    gpd.GeoDataFrame(
+        {
+            "geometry": [
+                LineString(
+                    [
+                        (CENTER_LNG - 0.01, CENTER_LAT),
+                        (CENTER_LNG + 0.01, CENTER_LAT + 0.008),
+                    ]
+                )
+            ],
+            "highway": ["cycleway"],
+            "kind": ["cycleway"],
+            "foot": [""],
+            "segregated": [""],
+            "cycleway": [""],
+        },
+        crs=config.WGS84,
+    ).to_parquet(cache / config.OSM_CYCLEWAYS_FILE)
 
     pd.DataFrame(
         {

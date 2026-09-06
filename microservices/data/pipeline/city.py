@@ -267,7 +267,13 @@ def sync_munich_bundle(ctx: CityContext) -> None:
     """Copy München's export into frontend/public so the bundled map stays current."""
     if ctx.slug not in {"muenchen", "munich"}:
         return
-    dst = config.FRONTEND_PUBLIC_DIR / "data" / "hexes.geojson"
-    if ctx.out_geojson.exists() and dst.parent.exists():
+    dst_dir = config.FRONTEND_PUBLIC_DIR / "data"
+    dst = dst_dir / "hexes.geojson"
+    if ctx.out_geojson.exists() and dst_dir.exists():
         shutil.copyfile(ctx.out_geojson, dst)
         log(STEP, f"synced bundled map -> {dst}")
+    overlay = ctx.base_dir / config.CYCLEWAYS_GEOJSON_FILE
+    overlay_dst = dst_dir / config.CYCLEWAYS_GEOJSON_FILE
+    if overlay.exists() and dst_dir.exists():
+        shutil.copyfile(overlay, overlay_dst)
+        log(STEP, f"synced cycleway overlay -> {overlay_dst}")

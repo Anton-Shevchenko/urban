@@ -1,6 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { locationScore } from '../scoring/formulas';
-import { normalizeLegacyProps } from './helpers';
+import { buildMapViewOptions, normalizeLegacyProps } from './helpers';
+
+describe('buildMapViewOptions', () => {
+  it('always lists contract map-view overlays', () => {
+    const opts = buildMapViewOptions({
+      daily_life: 'Infrastruktur',
+      cycleways: 'Radwege',
+    });
+    expect(opts.map((o) => o.value)).toEqual(['objective', 'cycleways']);
+    expect(opts[1]?.label).toBe('Radwege');
+  });
+});
 
 describe('normalizeLegacyProps', () => {
   it('does not invent a 50 daily-needs score when infrastructure is missing', () => {

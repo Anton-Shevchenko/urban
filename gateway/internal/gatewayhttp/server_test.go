@@ -41,11 +41,19 @@ func postChat(t *testing.T, srv *Server, handler http.Handler) *httptest.Respons
 }
 
 type fakeHex struct {
-	hex *hexv1.Hex
-	err error
+	hex   *hexv1.Hex
+	err   error
+	byKey map[string]*hexv1.Hex
 }
 
-func (f fakeHex) GetHex(context.Context, *hexv1.GetHexRequest) (*hexv1.Hex, error) {
+func (f fakeHex) GetHex(_ context.Context, in *hexv1.GetHexRequest) (*hexv1.Hex, error) {
+	if f.byKey != nil {
+		h, ok := f.byKey[in.GetCitySlug()+"/"+in.GetH3()]
+		if !ok {
+			return nil, status.Error(codes.NotFound, "missing")
+		}
+		return h, nil
+	}
 	return f.hex, f.err
 }
 
@@ -64,12 +72,20 @@ func (s *fakeStream) Recv() (*llmv1.Token, error) {
 }
 
 // fakeLLM hands out a fresh stream per call so a test can chat more than once.
+type completeSink struct {
+	req *llmv1.CompleteRequest
+}
+
 type fakeLLM struct {
 	toks []*llmv1.Token
 	err  error
+	sink *completeSink
 }
 
-func (f fakeLLM) CompleteStream(context.Context, *llmv1.CompleteRequest) (LLMStream, error) {
+func (f fakeLLM) CompleteStream(_ context.Context, in *llmv1.CompleteRequest) (LLMStream, error) {
+	if f.sink != nil {
+		f.sink.req = in
+	}
 	if f.err != nil {
 		return nil, f.err
 	}
@@ -160,8 +176,59 @@ func TestChatStreamsTokens(t *testing.T) {
 	if !strings.Contains(out, "event: done") {
 		t.Fatalf("done event missing: %s", out)
 	}
-	if !strings.Contains(out, `"prompt_version":"v2"`) {
+	if !strings.Contains(out, `"prompt_version":"v3"`) {
 		t.Fatalf("prompt version missing: %s", out)
+	}
+}
+
+func TestChatForwardsCompareHexes(t *testing.T) {
+	sink := &completeSink{}
+	focus := &hexv1.Hex{H3: "hex-a", CitySlug: "muenchen", CityName: "München"}
+	peer := &hexv1.Hex{H3: "hex-b", CitySlug: "koeln", CityName: "Köln"}
+	srv := &Server{
+		Hex: fakeHex{byKey: map[string]*hexv1.Hex{
+			"muenchen/hex-a": focus,
+			"koeln/hex-b":    peer,
+		}},
+		LLM: fakeLLM{
+			toks: []*llmv1.Token{{Text: "ok", Done: true}},
+			sink: sink,
+		},
+	}
+	body, err := json.Marshal(map[string]any{
+		"city_slug": "muenchen",
+		"h3":        "hex-a",
+		"message":   "Compare them",
+		"compare": []map[string]string{
+			{"city_slug": "koeln", "h3": "hex-b"},
+			{"city_slug": "missing", "h3": "nope"},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat", strings.NewReader(string(body)))
+	req.Header.Set("Content-Type", "application/json")
+	srv.Handler().ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status %d body %s", rr.Code, rr.Body.String())
+	}
+	if sink.req == nil {
+		t.Fatal("llm request not captured")
+	}
+	joined := ""
+	for _, m := range sink.req.GetMessages() {
+		joined += m.GetContent() + "\n"
+	}
+	if !strings.Contains(joined, "hex-a") || !strings.Contains(joined, "hex-b") {
+		t.Fatalf("prompt missing hex facts:\n%s", joined)
+	}
+	if !strings.Contains(joined, "Shortlist hexagon facts") {
+		t.Fatalf("prompt missing shortlist:\n%s", joined)
+	}
+	if strings.Contains(joined, "nope") {
+		t.Fatalf("missing peer should be skipped:\n%s", joined)
 	}
 }
 

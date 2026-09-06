@@ -58,6 +58,13 @@
     "s_traffic_safety_strict": { "$ref": "#/$defs/score" },
     "s_housing": { "$ref": "#/$defs/score" },
     "s_density": { "$ref": "#/$defs/score" },
+    "s_cycleways": {
+      "$ref": "#/$defs/score",
+      "description": "Dedicated/separated cycleways overlay — not part of Living Score"
+    },
+    "cycleway_length_m": { "$ref": "#/$defs/nullableNumber" },
+    "nearest_cycleway_m": { "$ref": "#/$defs/nullableNumber" },
+    "cycleway_km_per_km2": { "$ref": "#/$defs/nullableNumber" },
 
     "s_daily_life_city": { "$ref": "#/$defs/score", "description": "City-normalised copy, diagnostics only" },
     "s_walk_city": { "$ref": "#/$defs/score" },
@@ -203,6 +210,9 @@
       "s_housing",
       "s_density",
       "s_traffic_safety",
+      "s_cycleways",
+      "nearest_cycleway_m",
+      "cycleway_km_per_km2",
       "s_rent_relative_city",
       "s_rent_absolute",
       "s_rent_kalt_benchmark",

@@ -251,6 +251,15 @@ html, body {
     width: auto;
     max-height: 40vh;
   }
+  #compare-panel.is-home {
+    position: relative;
+    top: auto;
+    left: auto;
+    right: auto;
+    width: calc(100% - 24px);
+    max-height: none;
+    margin: 20px auto;
+  }
   #chat-panel {
     right: 8px;
     left: 8px;

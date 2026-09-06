@@ -61,7 +61,7 @@ export function HexTooltip({ model }: { model: HexTooltipModel }) {
           <div className="tt-score">
             {model.voi ? <VoiBlock voi={model.voi} /> : null}
             <div className="tt-pass">
-              <b>{model.objective}/100</b> Infrastruktur · mode: {model.modeLabel}
+              <b>{model.headlineScore}/100</b> {model.headlineLabel}
             </div>
             <div className="tt-fail-msg">
               Your Match: {model.match}/100 · City percentile: {model.percentile} · Data confidence: {model.confidence}%

@@ -59,6 +59,14 @@ def test_large_parks_score_full_park_quality():
     assert float(s.iloc[3]) == 100
 
 
+def test_cycleway_score_is_zero_without_paths():
+    from pipeline.export.score_scales import cycleway_score
+
+    s = cycleway_score(pd.Series([0.0, 6.0]), pd.Series([1500.0, 0.0]))
+    assert float(s.iloc[0]) == 0
+    assert float(s.iloc[1]) == 100
+
+
 def test_green_quality_without_canopy_near_large_park():
     """City-wide zero canopy must not keep park-adjacent hexes in the yellow band."""
     n = 5

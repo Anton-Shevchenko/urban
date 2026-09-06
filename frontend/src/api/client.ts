@@ -299,6 +299,33 @@ export async function fetchCityGeojson(slug: string, opts?: RequestOptions): Pro
   return resp.json();
 }
 
+const EMPTY_CYCLEWAYS: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
+
+async function fetchGeojson(url: string, opts?: RequestOptions): Promise<GeoJSON.FeatureCollection | null> {
+  try {
+    const resp = await timedFetch(url, { cache: 'no-store' }, opts, TIMEOUT_GEOJSON_MS);
+    if (!resp.ok) return null;
+    return resp.json();
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchCyclewaysGeojson(
+  slug: string,
+  opts?: RequestOptions,
+): Promise<GeoJSON.FeatureCollection> {
+  const fromApi = await fetchGeojson(apiUrl(`/api/city/${slug}/cycleways.geojson`), opts);
+  if (fromApi?.features?.length) return fromApi;
+  const fromPublic = await fetchGeojson(`/data/cycleways/${encodeURIComponent(slug)}.geojson`, opts);
+  if (fromPublic?.features?.length) return fromPublic;
+  if (slug === 'muenchen' || slug === 'munich') {
+    const bundled = await fetchGeojson('/data/cycleways.geojson', opts);
+    if (bundled?.features?.length) return bundled;
+  }
+  return EMPTY_CYCLEWAYS;
+}
+
 export async function fetchDestMatrix(
   slug: string,
   destinations: { lat: number; lng: number; weight?: number; label?: string }[],
@@ -371,7 +398,13 @@ function applySseBlock(
 }
 
 export async function streamHexChat(
-  body: { city_slug: string; h3: string; message: string; history?: ChatTurn[] },
+  body: {
+    city_slug: string;
+    h3: string;
+    message: string;
+    history?: ChatTurn[];
+    compare?: { city_slug: string; h3: string }[];
+  },
   onToken: (token: string) => void,
   signal?: AbortSignal,
 ): Promise<void> {

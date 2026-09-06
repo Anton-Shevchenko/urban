@@ -4,14 +4,12 @@ import { useWohnIndexStore } from './store';
 import {
   ChatContext,
   CityDataContext,
-  CompareContext,
   DestinationsContext,
   MapViewContext,
   PaintContext,
   WeightsContext,
   type ChatSlice,
   type CityDataSlice,
-  type CompareSlice,
   type DestinationsSlice,
   type MapViewSlice,
   type PaintSlice,
@@ -79,12 +77,6 @@ export function WohnIndexProvider({
     store.addDestination,
   ]);
 
-  const compare = useMemo<CompareSlice>(() => ({
-    comparison: store.comparison,
-    setComparison: store.setComparison,
-    toggleCompare: store.toggleCompare,
-  }), [store.comparison, store.setComparison, store.toggleCompare]);
-
   const mapView = useMemo<MapViewSlice>(() => ({
     mapView: store.mapView,
     paintMapView: store.paintMapView,
@@ -106,7 +98,8 @@ export function WohnIndexProvider({
     chatOpen: store.chatOpen,
     setChatOpen: store.setChatOpen,
     selectChatHex: store.selectChatHex,
-  }), [store.chatHex, store.chatOpen, store.setChatOpen, store.selectChatHex]);
+    setChatHex: store.setChatHex,
+  }), [store.chatHex, store.chatOpen, store.setChatOpen, store.selectChatHex, store.setChatHex]);
 
   const paint = useMemo<PaintSlice>(() => ({
     painting: store.painting,
@@ -130,15 +123,13 @@ export function WohnIndexProvider({
     <CityDataContext.Provider value={city}>
       <WeightsContext.Provider value={weights}>
         <DestinationsContext.Provider value={destinations}>
-          <CompareContext.Provider value={compare}>
-            <MapViewContext.Provider value={mapView}>
-              <ChatContext.Provider value={chat}>
-                <PaintContext.Provider value={paint}>
-                  {children}
-                </PaintContext.Provider>
-              </ChatContext.Provider>
-            </MapViewContext.Provider>
-          </CompareContext.Provider>
+          <MapViewContext.Provider value={mapView}>
+            <ChatContext.Provider value={chat}>
+              <PaintContext.Provider value={paint}>
+                {children}
+              </PaintContext.Provider>
+            </ChatContext.Provider>
+          </MapViewContext.Provider>
         </DestinationsContext.Provider>
       </WeightsContext.Provider>
     </CityDataContext.Provider>

@@ -1,4 +1,5 @@
 export { WohnIndexProvider } from './WohnIndexProvider';
+export { CompareSessionProvider } from './CompareSessionProvider';
 export { useCityData } from './hooks/useCityData';
 export { useWeights } from './hooks/useWeights';
 export { useDestinations } from './hooks/useDestinations';
@@ -9,6 +10,7 @@ export { usePaint } from './hooks/usePaint';
 export type {
   ChatHex,
   CityMeta,
+  CompareFocus,
   CompareItem,
   DebugReport,
   Destination,

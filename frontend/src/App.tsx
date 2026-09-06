@@ -1,6 +1,6 @@
 import { BrowserRouter, Link, Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom';
 import { useCallback } from 'react';
-import { WohnIndexProvider, useCityData, usePaint } from './wohnindex';
+import { CompareSessionProvider, WohnIndexProvider, useCityData, usePaint } from './wohnindex';
 import { useTheme, type ThemeMode } from './hooks/useTheme';
 import { usePanelOpen } from './hooks/usePanelOpen';
 import { MapView } from './map/MapView';
@@ -113,11 +113,13 @@ function MapApp() {
 export default function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<HomePage />} />
-        <Route path="/city/:slug" element={<MapApp />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+      <CompareSessionProvider>
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/city/:slug" element={<MapApp />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </CompareSessionProvider>
     </BrowserRouter>
   );
 }

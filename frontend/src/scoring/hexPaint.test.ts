@@ -7,7 +7,7 @@ import {
   createScoringEngine,
   PRESETS,
 } from './engine';
-import { isPrimaryPaintView, scoreHexPaint, serializeScoringContext } from './hexPaint';
+import { isPrimaryPaintView, isStreetOverlayView, scoreHexPaint, serializeScoringContext } from './hexPaint';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const geo = JSON.parse(
@@ -24,6 +24,12 @@ describe('isPrimaryPaintView', () => {
     expect(isPrimaryPaintView('city_percentile')).toBe(true);
     expect(isPrimaryPaintView('green')).toBe(false);
     expect(isPrimaryPaintView('housing_value')).toBe(false);
+    expect(isPrimaryPaintView('cycleways')).toBe(false);
+  });
+
+  it('treats cycleways as a street overlay, not a hex fill', () => {
+    expect(isStreetOverlayView('cycleways')).toBe(true);
+    expect(isStreetOverlayView('objective')).toBe(false);
   });
 });
 
@@ -46,6 +52,26 @@ describe('scoreHexPaint', () => {
       } else {
         expect(out.scores[i]).toBeCloseTo(expected, 5);
         expect(out.passed[i]).toBe(1);
+      }
+    }
+  });
+
+  it('matches engine.factorScalar for a cycleways overlay view', () => {
+    const ctx = createContextFromFeatures(features, meta);
+    const engine = createScoringEngine(ctx, features);
+    const sample = features.slice(0, 40);
+    const out = scoreHexPaint({
+      ctx: serializeScoringContext(ctx),
+      hexes: sample.map((f: { properties: Record<string, unknown> }) => f.properties),
+      paintMapView: 'cycleways',
+    });
+    expect(isPrimaryPaintView('cycleways')).toBe(false);
+    for (let i = 0; i < sample.length; i++) {
+      const expected = engine.factorScalar('cycleways', sample[i].properties);
+      if (expected == null) {
+        expect(Number.isNaN(out.scores[i])).toBe(true);
+      } else {
+        expect(out.scores[i]).toBeCloseTo(expected, 5);
       }
     }
   });

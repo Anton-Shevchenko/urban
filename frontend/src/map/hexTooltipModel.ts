@@ -12,6 +12,8 @@ export type HexTooltipModel = {
   insufficient: boolean;
   missingData: string[];
   modeLabel: string;
+  headlineScore: string;
+  headlineLabel: string;
   objective: string;
   match: string;
   percentile: string;
@@ -44,6 +46,18 @@ export function buildHexTooltipModel(
           ? 'City percentile'
           : (FACTOR_LABELS[modeRaw.replace(/^pillar:/, '')] || modeRaw);
 
+  const overlayKey = modeRaw.replace(/^pillar:/, '');
+  const overlayScore = overlayKey !== 'objective'
+    && overlayKey !== 'personal_match'
+    && overlayKey !== 'city_percentile'
+    && overlayKey !== 'comfort'
+    && overlayKey !== 'living'
+    ? engine.factorScalar(overlayKey, p)
+    : null;
+  const headlineScore = overlayScore != null && Number.isFinite(overlayScore)
+    ? String(Math.round(overlayScore))
+    : (loc.objectiveScore != null ? String(Math.round(loc.objectiveScore)) : '—');
+  const headlineLabel = overlayScore != null && Number.isFinite(overlayScore) ? modeLabel : 'Infrastruktur';
   const x = e.point.x + 14;
   const y = e.point.y + 14;
   const confidence = Math.round((loc.confidence ?? 0) * 100);
@@ -55,6 +69,8 @@ export function buildHexTooltipModel(
       insufficient: true,
       missingData: loc.missingData?.slice(0, 4) ?? [],
       modeLabel,
+      headlineScore: '—',
+      headlineLabel: modeLabel,
       objective: '—',
       match: '—',
       percentile: '—',
@@ -71,6 +87,8 @@ export function buildHexTooltipModel(
     insufficient: false,
     missingData: [],
     modeLabel,
+    headlineScore,
+    headlineLabel,
     objective: loc.objectiveScore != null ? String(Math.round(loc.objectiveScore)) : '—',
     match: loc.personalMatchScore != null ? String(Math.round(loc.personalMatchScore)) : '—',
     percentile: loc.cityPercentile != null ? String(Math.round(loc.cityPercentile)) : '—',

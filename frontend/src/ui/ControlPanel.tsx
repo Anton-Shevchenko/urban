@@ -1,5 +1,6 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import type { FormEvent } from 'react';
+import { cssGradient } from '../scoring/color';
 import { useCityData, useMapViewState, useWeights } from '../wohnindex';
 
 type Props = {
@@ -16,6 +17,7 @@ export function ControlPanel({ onClose }: Props) {
   } = useWeights();
   const {
     setMapView,
+    mapView,
     mapViewOptions,
     showHiddenGems,
     setShowHiddenGems,
@@ -36,9 +38,23 @@ export function ControlPanel({ onClose }: Props) {
     }),
   );
 
-  const legendNote = useMemo(() => (
-    'Infrastruktur · Läden, Cafés, Ärzte, Schulen u. a. · absolute 0–100 · 85–100 Excellent · 70–84 Good · 55–69 Average · 40–54 Below average · 0–39 Poor · grau = Insufficient data'
-  ), []);
+  const legendNote = useMemo(() => {
+    if (mapView === 'cycleways') {
+      return 'Radwege · nur baulich getrennt (highway=cycleway, cycleway=track) · kein Radfahrstreifen · OpenStreetMap-Linien, keine Hex-Füllung';
+    }
+    return (
+      'Infrastruktur · Läden, Cafés, Ärzte, Schulen u. a. · absolute 0–100 · 85–100 Excellent · 70–84 Good · 55–69 Average · 40–54 Below average · 0–39 Poor · grau = Insufficient data'
+    );
+  }, [mapView]);
+
+  const mapViewLabel = mapViewOptions.find((o) => o.value === mapView)?.label || 'Infrastruktur';
+  const streetOverlay = mapView === 'cycleways';
+
+  useEffect(() => {
+    const bar = document.getElementById('legend-bar');
+    if (!bar) return;
+    bar.style.background = streetOverlay ? '' : cssGradient();
+  }, [streetOverlay]);
 
   const onSearch = (e: FormEvent) => {
     e.preventDefault();
@@ -96,6 +112,9 @@ export function ControlPanel({ onClose }: Props) {
             {searchStatus.msg}
           </p>
         ) : null}
+        <p className="section-hint">
+          Klick merkt ein Hexagon. Die Liste bleibt beim Stadtwechsel — auch über Städte hinweg.
+        </p>
       </section>
 
       {hasVoi && (
@@ -157,11 +176,11 @@ export function ControlPanel({ onClose }: Props) {
       )}
 
       <section className="legend">
-        <span className="section-label">Infrastruktur</span>
+        <span className="section-label">{mapViewLabel}</span>
         <label className="map-view-field">
           <span>Kartenansicht</span>
           <select
-            value="objective"
+            value={mapView}
             onChange={(e) => setMapView(e.target.value)}
             aria-label="Kartenansicht wählen"
           >
@@ -172,11 +191,17 @@ export function ControlPanel({ onClose }: Props) {
             ))}
           </select>
         </label>
-        <div className="legend-bar" id="legend-bar" />
-        <div className="legend-scale">
-          <span>0 Poor</span>
-          <span>100 Excellent</span>
-        </div>
+        <div className={`legend-bar${streetOverlay ? ' is-cycleways' : ''}`} id="legend-bar" />
+        {streetOverlay ? (
+          <div className="legend-scale">
+            <span>Getrennte Radwege</span>
+          </div>
+        ) : (
+          <div className="legend-scale">
+            <span>0 Poor</span>
+            <span>100 Excellent</span>
+          </div>
+        )}
         <p className="section-hint legend-note">{legendNote}</p>
       </section>
 

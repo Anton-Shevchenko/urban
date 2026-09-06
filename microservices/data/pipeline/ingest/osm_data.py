@@ -519,6 +519,104 @@ def load_roads(ctx: CityContext) -> gpd.GeoDataFrame:
     return gdf
 
 
+_TRACK_KEYS = ("cycleway", "cycleway:both", "cycleway:left", "cycleway:right")
+
+
+def is_dedicated_cycleway(tags: dict | None) -> bool:
+    """True for physically separated cycleways, not painted lanes.
+
+    Included:
+      * ``highway=cycleway`` unless it is a shared Geh- und Radweg
+        (``foot=designated`` without ``segregated=yes``)
+      * ``highway=path`` + ``bicycle=designated`` + ``segregated=yes``
+      * ``cycleway=track`` / ``cycleway:left|right|both=track`` on a carriageway
+
+    Excluded: ``cycleway=lane``, ``shared_lane``, ``share_busway``, unsegregated
+    mixed-use paths.
+    """
+    tags = tags or {}
+    hw = str(tags.get("highway") or "")
+    foot = str(tags.get("foot") or "")
+    segregated = str(tags.get("segregated") or "")
+    bicycle = str(tags.get("bicycle") or "")
+
+    if hw == "cycleway":
+        if foot == "designated" and segregated != "yes":
+            return False
+        return True
+    if hw == "path" and bicycle == "designated" and segregated == "yes":
+        return True
+    return any(str(tags.get(key) or "") == "track" for key in _TRACK_KEYS)
+
+
+def _cycleway_kind(tags: dict) -> str:
+    hw = str(tags.get("highway") or "")
+    if hw == "cycleway":
+        return "cycleway"
+    if hw == "path":
+        return "segregated_path"
+    return "track"
+
+
+def fetch_cycleways(bbox_str: str) -> gpd.GeoDataFrame:
+    """Dedicated / physically separated cycleways for the city bbox."""
+    query = f"""
+    [out:json][timeout:180];
+    (
+      way["highway"="cycleway"]({bbox_str});
+      way["highway"="path"]["bicycle"="designated"]["segregated"="yes"]({bbox_str});
+      way["cycleway"="track"]({bbox_str});
+      way["cycleway:both"="track"]({bbox_str});
+      way["cycleway:left"="track"]({bbox_str});
+      way["cycleway:right"="track"]({bbox_str});
+    );
+    out geom;
+    """
+    els = overpass_elements(query, STEP)
+    rows = []
+    for el in els:
+        tags = el.get("tags", {}) or {}
+        if not is_dedicated_cycleway(tags):
+            continue
+        coords = [(nd["lon"], nd["lat"]) for nd in el.get("geometry", []) if "lon" in nd and "lat" in nd]
+        if len(coords) < 2:
+            continue
+        rows.append(
+            {
+                "geometry": LineString(coords),
+                "highway": tags.get("highway", ""),
+                "kind": _cycleway_kind(tags),
+                "foot": tags.get("foot", ""),
+                "segregated": tags.get("segregated", ""),
+                "cycleway": tags.get("cycleway", ""),
+            }
+        )
+    gdf = (
+        empty_gdf(["highway", "kind", "foot", "segregated", "cycleway"])
+        if not rows
+        else gpd.GeoDataFrame(rows, crs=config.WGS84)
+    )
+    log(STEP, f"dedicated cycleways fetched: {len(gdf)}")
+    return gdf
+
+
+def load_cycleways(ctx: CityContext) -> gpd.GeoDataFrame:
+    """Cached dedicated cycleways; refetch when the cache is missing or empty."""
+    cache = ctx.cache(config.OSM_CYCLEWAYS_FILE)
+    if cache.exists():
+        cached = gpd.read_parquet(cache)
+        if len(cached) > 0:
+            return cached
+        log(STEP, f"discarding empty cycleways cache {cache.name}")
+        cache.unlink(missing_ok=True)
+    gdf = fetch_cycleways(ctx.bbox_str)
+    if len(gdf) > 0:
+        gdf.to_parquet(cache)
+    else:
+        log(STEP, "skipping empty cycleways cache write (will retry next run)")
+    return gdf
+
+
 def load_stations(ctx: CityContext) -> gpd.GeoDataFrame:
     cache = ctx.cache(config.OSM_STATIONS_FILE)
     if not cache.exists():

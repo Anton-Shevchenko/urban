@@ -155,3 +155,19 @@ describe('locationScore empty', () => {
     expect(r.confidence).toBe(0);
   });
 });
+
+describe('cycleways map overlay', () => {
+  it('reads s_cycleways via SCORE_PROPS', () => {
+    const ctx = createContextFromFeatures(features, meta);
+    const engine = createScoringEngine(ctx, features);
+    expect(engine.factorScalar('cycleways', { s_cycleways: 74 })).toBe(74);
+    expect(engine.factorScalar('cycleways', {})).toBeNull();
+  });
+
+  it('paints s_cycleways when mapMetricMode is the overlay id', () => {
+    const ctx = createContextFromFeatures(features, meta);
+    ctx.mapMetricMode = 'cycleways';
+    const engine = createScoringEngine(ctx, features);
+    expect(engine.comfortScalar({ h3: 'test', s_cycleways: 74 })).toBe(74);
+  });
+});

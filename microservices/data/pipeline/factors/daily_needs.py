@@ -84,6 +84,24 @@ def _nearest_poi_per_hex(
     return walk, poi_x, poi_y, brand
 
 
+def _count_pois_in_hex(
+    hexes: gpd.GeoDataFrame,
+    pois: gpd.GeoDataFrame,
+) -> np.ndarray:
+    """How many POIs have their centroid inside each hex (not walk-radius)."""
+    n = len(hexes)
+    counts = np.zeros(n, dtype=np.int32)
+    if pois is None or len(pois) == 0:
+        return counts
+    pts = pois.copy()
+    pts["geometry"] = pts.geometry.centroid
+    joined = gpd.sjoin(pts, hexes[["h3_index", "geometry"]], predicate="within", how="inner")
+    if len(joined) == 0:
+        return counts
+    vc = joined.groupby("h3_index").size()
+    return hexes["h3_index"].map(vc).fillna(0).to_numpy().astype(np.int32)
+
+
 def _count_within_minutes(
     hexes: gpd.GeoDataFrame,
     pois: gpd.GeoDataFrame,
@@ -187,8 +205,10 @@ def compute(ctx: CityContext) -> gpd.GeoDataFrame:
         bonus = np.where(count_arr[:, j] >= 2, SECOND_BONUS * 0.5, 0.0)
         avail = (avail + bonus).clip(0, 100)
         avail_arr[:, j] = avail.values
+        in_hex = _count_pois_in_hex(hexes, subset)
         out[col_min] = np.where(np.isfinite(walk), walk, 99.0).round(1)
         out[col_avail] = avail.round(1).values
+        out[f"dn_{cat}_n"] = in_hex
 
     # Weighted category aggregation inside each group (not max).
     # categoryScore ≈ 0.75×nearestAvail + 0.25×choice when count≥2 bonus already in avail.

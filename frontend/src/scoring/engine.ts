@@ -31,6 +31,7 @@ import {
   type CityObjectiveIndex,
 } from './formulas';
 import {
+  MAP_VIEW_METRICS,
   METRIC_LABELS,
   PILLAR_LABELS as CONTRACT_PILLAR_LABELS,
   SCORE_PROPS as CONTRACT_SCORE_PROPS,
@@ -101,6 +102,7 @@ export const IMPORTANCE_KEYS = [
 export const PREF_KEYS = ['urban_activity', 'density', 'housing'];
 
 export const SCORE_PROPS: Record<string, string> = { ...CONTRACT_SCORE_PROPS };
+export { MAP_VIEW_METRICS };
 
 const MAP_MODE_LABELS: Record<string, string> = {
   objective: 'Infrastruktur',
@@ -198,6 +200,7 @@ function parseMapMetricMode(raw: string | null | undefined): MapMetricMode {
     return raw;
   }
   if (raw.startsWith('pillar:')) return raw as MapMetricMode;
+  if (MAP_VIEW_METRICS.includes(raw)) return raw as MapMetricMode;
   // Legacy diagnose / factor map views
   if (PILLAR_KEYS.includes(raw as typeof PILLAR_KEYS[number]) || SCORE_PROPS[raw]) {
     return `pillar:${raw === 'housing_value' ? 'housing_affordability' : raw}`;
@@ -440,6 +443,8 @@ export function createScoringEngine(
       score = factorScalar(key, p);
     } else if (mode === 'personal_match') {
       score = locationFor(p).personalMatchScore;
+    } else if (typeof mode === 'string' && (MAP_VIEW_METRICS.includes(mode) || SCORE_PROPS[mode])) {
+      score = factorScalar(mode, p);
     } else {
       score = locationFor(p).objectiveScore;
     }

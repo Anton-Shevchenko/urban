@@ -41,8 +41,8 @@ func TestBuildIncludesFactsOmitsEmpty(t *testing.T) {
 }
 
 func TestPromptVersionIsStamped(t *testing.T) {
-	if Version != "v2" {
-		t.Fatalf("Version = %q, want v2", Version)
+	if Version != "v3" {
+		t.Fatalf("Version = %q, want v3", Version)
 	}
 	if !strings.Contains(System, "Living Score") {
 		t.Fatalf("system prompt missing grounding rules: %q", System)
@@ -52,6 +52,22 @@ func TestPromptVersionIsStamped(t *testing.T) {
 	}
 	if !strings.Contains(System, "Always answer in English") {
 		t.Fatalf("system prompt missing English rule: %q", System)
+	}
+}
+
+func TestBuildIncludesShortlist(t *testing.T) {
+	focus := &hexv1.Hex{H3: "hex-a", CitySlug: "muenchen", CityName: "München"}
+	peer := &hexv1.Hex{H3: "hex-b", CitySlug: "koeln", CityName: "Köln"}
+	msgs := Build(focus, "Compare them", nil, peer)
+	facts := msgs[1].Content
+	if !strings.Contains(facts, "Shortlist hexagon facts (JSON array):") {
+		t.Fatalf("missing shortlist block: %s", facts)
+	}
+	if !strings.Contains(facts, "hex-a") || !strings.Contains(facts, "hex-b") {
+		t.Fatalf("facts missing both hexes: %s", facts)
+	}
+	if !strings.Contains(msgs[0].Content, "shortlist") {
+		t.Fatalf("system prompt should mention shortlist: %q", msgs[0].Content)
 	}
 }
 

@@ -69,6 +69,7 @@ def test_missing_geojson_is_404(api):
     assert client.get("/api/city/nowhere.geojson").status_code == 404
     assert client.get("/api/city/nowhere/stats").status_code == 404
     assert client.get("/api/city/nowhere/hexes.parquet").status_code == 404
+    assert client.get("/api/city/nowhere/cycleways.geojson").status_code == 404
 
 
 def test_unknown_status_is_404(api):
@@ -214,3 +215,14 @@ def test_city_geojson_from_db(api):
     resp = client.get("/api/city/koeln.geojson")
     assert resp.status_code == 200
     assert resp.json() == payload
+
+
+def test_city_cycleways_from_disk(api):
+    client, _, cities, _ = api
+    city = cities / "muenchen"
+    city.mkdir()
+    overlay = {"type": "FeatureCollection", "features": [{"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[11.5, 48.1], [11.51, 48.11]]}, "properties": {"kind": "cycleway"}}]}
+    (city / "cycleways.geojson").write_text(json.dumps(overlay), encoding="utf-8")
+    resp = client.get("/api/city/muenchen/cycleways.geojson")
+    assert resp.status_code == 200
+    assert resp.json()["features"][0]["properties"]["kind"] == "cycleway"

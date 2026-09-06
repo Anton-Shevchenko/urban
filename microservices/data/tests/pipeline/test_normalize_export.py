@@ -72,3 +72,20 @@ def test_export_is_reproducible(exported):
     first = ctx.out_geojson.read_text(encoding="utf-8")
     normalize_export.main(ctx)
     assert ctx.out_geojson.read_text(encoding="utf-8") == first
+
+
+def test_cycleways_overlay_is_exported(exported):
+    scores = [f["properties"].get("s_cycleways") for f in exported["data"]["features"]]
+    assert all(v is not None and 0 <= v <= 100 for v in scores)
+    assert max(scores) - min(scores) > 5
+
+
+def test_cycleway_lines_sidecar_is_exported(exported):
+    from pipeline import config
+
+    path = exported["ctx"].base_dir / config.CYCLEWAYS_GEOJSON_FILE
+    assert path.is_file()
+    overlay = json.loads(path.read_text(encoding="utf-8"))
+    assert overlay["type"] == "FeatureCollection"
+    assert len(overlay["features"]) >= 1
+    assert overlay["features"][0]["geometry"]["type"] in ("LineString", "MultiLineString")

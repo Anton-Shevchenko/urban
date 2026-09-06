@@ -107,6 +107,11 @@ export type HexProperties = {
   s_traffic_safety_strict?: number | null;
   s_housing?: number | null;
   s_density?: number | null;
+  /** Dedicated/separated cycleways overlay — not part of Living Score */
+  s_cycleways?: number | null;
+  cycleway_length_m?: number | null;
+  nearest_cycleway_m?: number | null;
+  cycleway_km_per_km2?: number | null;
   /** City-normalised copy, diagnostics only */
   s_daily_life_city?: number | null;
   s_walk_city?: number | null;
@@ -216,6 +221,10 @@ export const DECLARED_HEX_PROPERTIES: string[] = [
   's_traffic_safety_strict',
   's_housing',
   's_density',
+  's_cycleways',
+  'cycleway_length_m',
+  'nearest_cycleway_m',
+  'cycleway_km_per_km2',
   's_daily_life_city',
   's_walk_city',
   's_transit_city',
@@ -341,6 +350,9 @@ export const FRONTEND_HEX_PROPERTIES: string[] = [
   's_housing',
   's_density',
   's_traffic_safety',
+  's_cycleways',
+  'nearest_cycleway_m',
+  'cycleway_km_per_km2',
   's_rent_relative_city',
   's_rent_absolute',
   's_rent_kalt_benchmark',
@@ -380,6 +392,7 @@ export const SCORE_PROPS: Record<string, string> = {
   housing: 's_housing',
   density: 's_density',
   price: 's_rent_relative_city',
+  cycleways: 's_cycleways',
 };
 
 export const METRIC_LABELS: Record<string, string> = {
@@ -404,6 +417,7 @@ export const METRIC_LABELS: Record<string, string> = {
   housing: 'Wohnalter',
   density: 'Dichte',
   price: 'Miete (stadtrelativ)',
+  cycleways: 'Radwege',
 };
 
 export const PILLAR_LABELS: Record<string, string> = {
@@ -421,3 +435,7 @@ export const PILLAR_LABELS: Record<string, string> = {
   housing_value: 'Wohnkosten',
   center: 'Zentralität',
 };
+
+export const MAP_VIEW_METRICS: string[] = [
+  'cycleways',
+];

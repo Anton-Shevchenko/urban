@@ -218,6 +218,18 @@ def metric_meta(metrics: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def map_view_metrics(metrics: dict[str, Any]) -> tuple[str, ...]:
+    """Overlay metrics shown as extra map-colour modes (not Living Score)."""
+    out: list[str] = []
+    for metric in (strip_comments(x) for x in metrics.get("metrics", [])):
+        if not metric.get("map_view"):
+            continue
+        if metric.get("enabled") is False:
+            continue
+        out.append(metric["id"])
+    return tuple(out)
+
+
 def render_python(
     scoring: dict[str, Any],
     schema: dict[str, Any],
@@ -279,6 +291,8 @@ def render_python(
                 f"METRIC_TYPES: dict[str, str] = {lit(metric_types(metrics))}",
                 "",
                 f"METRIC_META: dict[str, Any] = {lit(metric_meta(metrics))}",
+                "",
+                f"MAP_VIEW_METRICS: tuple[str, ...] = {lit(map_view_metrics(metrics))}",
                 "",
                 f"HEX_PILLAR_KEYS: dict[str, str] = {lit(sheet.get('pillars', {}))}",
                 "",
@@ -455,6 +469,10 @@ def render_typescript(
                 "export const PILLAR_LABELS: Record<string, string> = "
                 + _ts_flat_string_map(pillar_labels)
                 + ";",
+                "",
+                "export const MAP_VIEW_METRICS: string[] = [",
+                quoted_list(list(map_view_metrics(metrics))),
+                "];",
                 "",
             ]
         )

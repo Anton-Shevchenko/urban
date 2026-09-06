@@ -9,7 +9,8 @@ export type MapMetricMode =
   | 'objective'
   | 'personal_match'
   | 'city_percentile'
-  | `pillar:${string}`;
+  | `pillar:${string}`
+  | 'cycleways';
 
 /** Generated from contracts/scoring.json — do not redeclare the pillar list. */
 export type { ObjectivePillarKey } from './generated/contract';

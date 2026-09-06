@@ -742,3 +742,20 @@ def traffic_safety_strict(road_risk: pd.Series) -> pd.Series:
     return _interp(
         road_risk, [0.17, 0.22, 0.30, 0.38, 0.48, 0.58], [100, 68, 42, 22, 8, 0], below=100, above=0
     )
+
+
+def cycleway_density_score(km_per_km2: pd.Series) -> pd.Series:
+    """Dedicated cycleway length density (km of path per km² of hex)."""
+    return _interp(km_per_km2, [0, 0.5, 1.5, 3.0, 6.0], [0, 30, 55, 80, 100], below=0, above=100)
+
+
+def cycleway_distance_score(dist_m: pd.Series) -> pd.Series:
+    """Straight-line metres from the hex boundary to the nearest dedicated cycleway."""
+    return _interp(dist_m, [0, 80, 200, 400, 800, 1500], [100, 85, 65, 40, 15, 0], below=100, above=0)
+
+
+def cycleway_score(km_per_km2: pd.Series, dist_m: pd.Series) -> pd.Series:
+    """Overlay score: density in the hex, with a smaller proximity bonus nearby."""
+    dens = cycleway_density_score(km_per_km2)
+    prox = cycleway_distance_score(dist_m)
+    return (0.75 * dens + 0.25 * prox).clip(0, 100).round(1)
