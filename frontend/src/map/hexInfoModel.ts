@@ -51,6 +51,7 @@ export type HexInfoModel = {
   confidence: number | null;
   explainText: string;
   rentEurM2: number | null;
+  priceLines: string[];
   pillars: HexInfoPillarRow[];
   walks: HexInfoWalkRow[];
 };
@@ -59,6 +60,26 @@ export function minutesOrNull(raw: unknown): number | null {
   const n = Number(raw);
   if (!Number.isFinite(n) || n < 0 || n >= 90) return null;
   return n;
+}
+
+function formatPriceLine(label: string, amount: unknown, source: unknown, asOf: unknown): string | null {
+  const value = Number(amount);
+  if (!Number.isFinite(value) || value <= 0) return null;
+  const digits = value >= 100 ? 0 : 1;
+  const euros = value.toLocaleString('de-DE', {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  });
+  const published = typeof source === 'string' ? source.trim() : '';
+  const date = typeof asOf === 'string' ? asOf.trim() : '';
+  let line = `${label}: ${euros} €/m²`;
+  if (published) {
+    line += ` · ${published}`;
+    if (date && !published.includes(date)) line += `, ${date}`;
+  } else if (date) {
+    line += ` · ${date}`;
+  }
+  return line;
 }
 
 export function countOrNull(raw: unknown): number | null {
@@ -147,6 +168,11 @@ export function buildHexInfoModel(
     confidence: result.confidence ?? explained.confidence,
     explainText: explained.text,
     rentEurM2: Number.isFinite(rent) && rent > 0 ? rent : null,
+    priceLines: [
+      formatPriceLine('Kaltmiete', props.rent_eur_m2, props.rent_source, props.rent_as_of),
+      formatPriceLine('Angebotsmiete', props.asking_rent_eur_m2, props.asking_rent_source, props.asking_rent_as_of),
+      formatPriceLine('Kaufpreis', props.sale_eur_m2, props.sale_source, props.sale_as_of),
+    ].filter((line): line is string => line != null),
     pillars: HEX_PILLAR_FACTS.map((row) => {
       const fromProps = firstNumber(props, row.props);
       const fromScore = result.pillars?.[row.scoreKey];

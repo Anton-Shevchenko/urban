@@ -157,9 +157,7 @@ function estimatedMonthlyRent(p: PipelinePoint, ctx: ScoringContext): number | n
   const cold = num(p.rent_eur_m2);
   if (cold == null) return null;
   const area = ctx.desiredAreaM2 || DEFAULT_SIZE_M2;
-  const nk = num(p.nebenkosten_eur_m2);
-  const nkPerM2 = nk ?? DEFAULT_NEBENKOSTEN_EUR_M2;
-  return (cold + nkPerM2) * area;
+  return cold * area;
 }
 
 function budgetAffordScalar(p: PipelinePoint, ctx: ScoringContext): number | null {

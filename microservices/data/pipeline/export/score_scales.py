@@ -176,17 +176,26 @@ def green_quality_score(
 
 
 def rent_percentile_score(rent_eur_m2: pd.Series) -> pd.Series:
-    """City-relative affordability — smooth rank: cheap hexes → 100."""
+    """City-relative affordability — smooth rank: cheap hexes → 100.
+
+    Hexes without a published rent stay NaN. They are not ranked as if they
+    had a price.
+    """
     x = rent_eur_m2.astype(float)
-    n = len(x)
-    if n <= 1:
-        return pd.Series(50.0, index=x.index)
-    # Break ties within identical €/m² using stable sort order for continuous ranks.
-    order = np.argsort(x.to_numpy(), kind="mergesort")
+    scored = np.full(len(x), np.nan)
+    valid = np.isfinite(x.to_numpy())
+    n = int(valid.sum())
+    if n == 0:
+        return pd.Series(scored, index=x.index)
+    if n == 1:
+        scored[valid] = 50.0
+        return pd.Series(scored, index=x.index)
+    values = x.to_numpy()[valid]
+    order = np.argsort(values, kind="mergesort")
     ranks = np.empty(n, dtype=float)
     ranks[order] = np.arange(n, dtype=float)
-    pct = ranks / (n - 1)
-    return pd.Series(100.0 * (1.0 - pct), index=x.index).round(2)
+    scored[np.flatnonzero(valid)] = np.round(100.0 * (1.0 - ranks / (n - 1)), 2)
+    return pd.Series(scored, index=x.index)
 
 
 def rent_value_score(
@@ -208,11 +217,13 @@ def rent_value_score(
 
 def rent_kalt_lenient(rent_eur_m2: pd.Series) -> pd.Series:
     """Absolute cold-rent €/m² — steeper Munich curve (16→80, not flat 60–70 band)."""
-    return _interp(rent_eur_m2, [16, 18, 20, 22, 24, 26], [80, 65, 50, 35, 20, 10], below=100, above=0)
+    scored = _interp(rent_eur_m2, [16, 18, 20, 22, 24, 26], [80, 65, 50, 35, 20, 10], below=100, above=0)
+    return scored.where(np.isfinite(rent_eur_m2.astype(float)))
 
 
 def rent_kalt_strict(rent_eur_m2: pd.Series) -> pd.Series:
-    return _interp(rent_eur_m2, [16, 18, 20, 22, 24, 26], [80, 60, 40, 22, 8, 0], below=100, above=0)
+    scored = _interp(rent_eur_m2, [16, 18, 20, 22, 24, 26], [80, 60, 40, 22, 8, 0], below=100, above=0)
+    return scored.where(np.isfinite(rent_eur_m2.astype(float)))
 
 
 def rent_warm_lenient(warm_monthly: pd.Series) -> pd.Series:

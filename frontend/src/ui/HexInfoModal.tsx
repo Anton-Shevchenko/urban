@@ -72,10 +72,12 @@ export function HexInfoModal({
               {' · '}
               Konfidenz:{' '}
               {info.confidence == null ? '—' : `${Math.round(info.confidence * 100)}%`}
-              {info.rentEurM2 != null
-                ? ` · Miete: ${info.rentEurM2.toLocaleString('de-DE', { maximumFractionDigits: 1 })} €/m²`
-                : ''}
             </p>
+            {info.priceLines.map((line) => (
+              <p className="hex-info-meta" key={line}>
+                {line}
+              </p>
+            ))}
             <table className="hex-info-table">
               <thead>
                 <tr>

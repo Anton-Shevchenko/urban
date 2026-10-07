@@ -11,6 +11,8 @@ __pycache__/
 microservices/data/data/cache/
 microservices/data/data/cities/
 microservices/data/data/gtfs/
+microservices/data/data/zensus/
+microservices/data/data/market/
 microservices/data/data/avm/
 microservices/data/data/wohnindex.db
 microservices/data/data/*.db-journal

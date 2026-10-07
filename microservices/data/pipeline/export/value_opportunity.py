@@ -515,6 +515,39 @@ def _explain_row(
     return "\n".join(lines)
 
 
+_UNOBSERVED_PRICE_COLS = (
+    "voi_fair_rent_min",
+    "voi_fair_rent_max",
+    "voi_fair_rent_median",
+    "voi_expected_rent_eur_m2",
+    "voi_price_gap",
+    "voi_adjusted_price_gap",
+    "s_value_opportunity",
+    "s_value_opportunity_raw",
+)
+
+
+def _blank_unobserved_voi(out: pd.DataFrame) -> pd.DataFrame:
+    """Fair-rent fields are not a displayed price when Kaltmiete was not observed."""
+    if "rent_eur_m2" not in out.columns:
+        missing = pd.Series(True, index=out.index)
+    else:
+        rent = pd.to_numeric(out["rent_eur_m2"], errors="coerce")
+        missing = ~(rent.notna() & (rent > 0))
+    if not bool(missing.any()):
+        return out
+    for column in _UNOBSERVED_PRICE_COLS:
+        if column in out.columns:
+            out.loc[missing, column] = np.nan
+    if "voi_class" in out.columns:
+        out.loc[missing, "voi_class"] = None
+    if "voi_explain" in out.columns:
+        out.loc[missing, "voi_explain"] = ""
+    if "voi_highlight" in out.columns:
+        out.loc[missing, "voi_highlight"] = 0
+    return out
+
+
 def compute_value_opportunity(
     df: pd.DataFrame,
     *,
@@ -551,7 +584,7 @@ def compute_value_opportunity(
     if n == 0 or "rent_eur_m2" not in out.columns or "s_living" not in out.columns:
         for col, val in empty_cols.items():
             out[col] = val
-        return out
+        return _blank_unobserved_voi(out)
 
     rent = out["rent_eur_m2"].astype(float)
     living = out["s_living"].astype(float)
@@ -567,7 +600,7 @@ def compute_value_opportunity(
                 continue
             out[col] = val
         out["voi_location_premium"] = premium
-        return out
+        return _blank_unobserved_voi(out)
 
     local_adv, comp_count, cheaper_alts, uniqueness = _neighbor_stats(
         out,
@@ -705,4 +738,4 @@ def compute_value_opportunity(
     out["voi_confidence"] = conf_label
     out["voi_explain"] = pd.Series(explains, index=out.index)
     out["voi_highlight"] = highlight
-    return out
+    return _blank_unobserved_voi(out)

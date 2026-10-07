@@ -95,7 +95,33 @@ describe('buildHexInfoModel', () => {
     expect(info.walks.find((w) => w.key === 'dn_supermarket_min')?.inHex).toBe(0);
     expect(info.walks.find((w) => w.key === 'dn_kita_min')?.inHex).toBe(2);
     expect(info.walks.find((w) => w.key === 'dn_school_min')?.minutes).toBeNull();
+    expect(info.priceLines.some((line) => line.startsWith('Kaltmiete:'))).toBe(true);
     expect(countOrNull(2.4)).toBe(2);
+  });
+
+  it('hides a price that was not published', () => {
+    const info = buildHexInfoModel({ ...props, rent_eur_m2: null }, 'München');
+    expect(info.priceLines).toEqual([]);
+  });
+
+  it('prints source, date, and resolution without mixing sale into rent', () => {
+    const info = buildHexInfoModel(
+      {
+        ...props,
+        rent_eur_m2: 11.4,
+        rent_source: 'Zensus 2022, 100 m, fortgeschrieben bis 2026-08',
+        rent_as_of: '2026-08',
+        asking_rent_eur_m2: null,
+        sale_eur_m2: 5251,
+        sale_source: 'Gutachterausschuss Berlin, Stadt',
+        sale_as_of: '2024',
+      },
+      'Berlin',
+    );
+    expect(info.priceLines).toEqual([
+      'Kaltmiete: 11,4 €/m² · Zensus 2022, 100 m, fortgeschrieben bis 2026-08',
+      'Kaufpreis: 5.251 €/m² · Gutachterausschuss Berlin, Stadt, 2024',
+    ]);
   });
 
   it('lists ÖPNV, Grün and Ruhe from hex_fact_sheet pillars', () => {

@@ -6,7 +6,7 @@ package contract
 
 const ScoreMethodVersion = "objective-v2"
 
-const PipelineVersion = 16
+const PipelineVersion = 17
 
 // ObjectiveWeights are the pillar weights of the objective Living Score.
 var ObjectiveWeights = map[string]float64{
@@ -75,6 +75,14 @@ var DeclaredHexProperties = []string{
 	"rent_source",
 	"rent_confidence",
 	"rent_year",
+	"rent_as_of",
+	"rent_resolution",
+	"asking_rent_eur_m2",
+	"asking_rent_source",
+	"asking_rent_as_of",
+	"sale_eur_m2",
+	"sale_source",
+	"sale_as_of",
 	"center_min",
 	"center_min_best",
 	"dn_supermarket_min",
@@ -202,6 +210,12 @@ var HexScalarKeys = []string{
 	"h3",
 	"s_living",
 	"rent_eur_m2",
+	"rent_source",
+	"rent_as_of",
+	"asking_rent_eur_m2",
+	"asking_rent_source",
+	"sale_eur_m2",
+	"sale_source",
 	"voi_class",
 	"voi_explain",
 }

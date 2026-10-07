@@ -7,7 +7,7 @@ from __future__ import annotations
 from typing import Any
 
 SCORE_METHOD_VERSION = 'objective-v2'
-PIPELINE_VERSION = 16
+PIPELINE_VERSION = 17
 
 OBJECTIVE_WEIGHTS: dict[str, float] = {   'daily_life': 1.0,
     'walk': 0.0,
@@ -44,7 +44,7 @@ HEX_PROPERTIES_SCHEMA: dict[str, Any] = {   '$schema': 'https://json-schema.org/
     'description': 'Contract between the Python pipeline (producer), hex-svc (Go consumer) and '
                    'the frontend scoring engine (TypeScript consumer). Validated on every '
                    'export by pipeline.contract.validate_feature_properties.',
-    'x-pipeline-version': 16,
+    'x-pipeline-version': 17,
     'type': 'object',
     'additionalProperties': True,
     'required': [   'h3',
@@ -135,11 +135,29 @@ HEX_PROPERTIES_SCHEMA: dict[str, Any] = {   '$schema': 'https://json-schema.org/
                       's_rent_warm': {'$ref': '#/$defs/score'},
                       's_rent_warm_strict': {'$ref': '#/$defs/score'},
                       'rent_eur_m2': {   '$ref': '#/$defs/nullableNumber',
-                                         'description': 'Cold rent €/m²'},
-                      'rent_monthly_est': {'$ref': '#/$defs/nullableNumber'},
+                                         'description': 'Observed cold rent €/m². Null when '
+                                                        'unpublished.'},
+                      'rent_monthly_est': {   '$ref': '#/$defs/nullableNumber',
+                                              'description': 'Unused. Warm rent is not '
+                                                             'estimated.'},
                       'rent_source': {'$ref': '#/$defs/nullableString'},
                       'rent_confidence': {'$ref': '#/$defs/nullableString'},
                       'rent_year': {'type': ['integer', 'number', 'string', 'null']},
+                      'rent_as_of': {   '$ref': '#/$defs/nullableString',
+                                        'description': 'Month the cold rent was indexed to, or '
+                                                       'the publication date'},
+                      'rent_resolution': {   '$ref': '#/$defs/nullableString',
+                                             'description': '100 m, Bezirk, or Stadt'},
+                      'asking_rent_eur_m2': {   '$ref': '#/$defs/nullableNumber',
+                                                'description': 'Asking rent €/m². Not mixed '
+                                                               'into Kaltmiete.'},
+                      'asking_rent_source': {'$ref': '#/$defs/nullableString'},
+                      'asking_rent_as_of': {'$ref': '#/$defs/nullableString'},
+                      'sale_eur_m2': {   '$ref': '#/$defs/nullableNumber',
+                                         'description': 'Notarised apartment sale €/m². Not '
+                                                        'derived from rent.'},
+                      'sale_source': {'$ref': '#/$defs/nullableString'},
+                      'sale_as_of': {'$ref': '#/$defs/nullableString'},
                       'center_min': {   '$ref': '#/$defs/nullableNumber',
                                         'description': 'Walk minutes to the main centre'},
                       'center_min_best': {'$ref': '#/$defs/nullableNumber'},
@@ -356,6 +374,14 @@ DECLARED_HEX_PROPERTIES: tuple[str, ...] = (   'h3',
     'rent_source',
     'rent_confidence',
     'rent_year',
+    'rent_as_of',
+    'rent_resolution',
+    'asking_rent_eur_m2',
+    'asking_rent_source',
+    'asking_rent_as_of',
+    'sale_eur_m2',
+    'sale_source',
+    'sale_as_of',
     'center_min',
     'center_min_best',
     'dn_supermarket_min',
@@ -741,4 +767,14 @@ HEX_WALK_MINUTE_KEYS: dict[str, str] = {   'supermarket': 'dn_supermarket_min',
     'playground': 'dn_playground_min',
     'center': 'center_min'}
 
-HEX_SCALAR_KEYS: tuple[str, ...] = ('h3', 's_living', 'rent_eur_m2', 'voi_class', 'voi_explain')
+HEX_SCALAR_KEYS: tuple[str, ...] = (   'h3',
+    's_living',
+    'rent_eur_m2',
+    'rent_source',
+    'rent_as_of',
+    'asking_rent_eur_m2',
+    'asking_rent_source',
+    'sale_eur_m2',
+    'sale_source',
+    'voi_class',
+    'voi_explain')

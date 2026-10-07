@@ -10,7 +10,7 @@ export type ObjectivePillarKey =
   | 'housing_affordability';
 
 export const SCORE_METHOD_VERSION = 'objective-v2' as const;
-export const PIPELINE_VERSION = 16 as const;
+export const PIPELINE_VERSION = 17 as const;
 
 export const OBJECTIVE_PILLAR_KEYS: ObjectivePillarKey[] = [
   'daily_life',
@@ -133,12 +133,25 @@ export type HexProperties = {
   s_rent_value?: number | null;
   s_rent_warm?: number | null;
   s_rent_warm_strict?: number | null;
-  /** Cold rent €/m² */
+  /** Observed cold rent €/m². Null when unpublished. */
   rent_eur_m2?: number | null;
+  /** Unused. Warm rent is not estimated. */
   rent_monthly_est?: number | null;
   rent_source?: string | null;
   rent_confidence?: string | null;
   rent_year?: number | string | null;
+  /** Month the cold rent was indexed to, or the publication date */
+  rent_as_of?: string | null;
+  /** 100 m, Bezirk, or Stadt */
+  rent_resolution?: string | null;
+  /** Asking rent €/m². Not mixed into Kaltmiete. */
+  asking_rent_eur_m2?: number | null;
+  asking_rent_source?: string | null;
+  asking_rent_as_of?: string | null;
+  /** Notarised apartment sale €/m². Not derived from rent. */
+  sale_eur_m2?: number | null;
+  sale_source?: string | null;
+  sale_as_of?: string | null;
   /** Walk minutes to the main centre */
   center_min?: number | null;
   center_min_best?: number | null;
@@ -250,6 +263,14 @@ export const DECLARED_HEX_PROPERTIES: string[] = [
   'rent_source',
   'rent_confidence',
   'rent_year',
+  'rent_as_of',
+  'rent_resolution',
+  'asking_rent_eur_m2',
+  'asking_rent_source',
+  'asking_rent_as_of',
+  'sale_eur_m2',
+  'sale_source',
+  'sale_as_of',
   'center_min',
   'center_min_best',
   'dn_supermarket_min',

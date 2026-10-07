@@ -20,7 +20,7 @@
       "playground": "dn_playground_min",
       "center": "center_min"
     },
-    "scalars": ["h3", "s_living", "rent_eur_m2", "voi_class", "voi_explain"]
+    "scalars": ["h3", "s_living", "rent_eur_m2", "rent_source", "rent_as_of", "asking_rent_eur_m2", "asking_rent_source", "sale_eur_m2", "sale_source", "voi_class", "voi_explain"]
   },
   "steps": [
     {

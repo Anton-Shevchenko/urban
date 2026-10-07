@@ -149,79 +149,23 @@ BAYERN_NOISE_WFS = os.environ.get(
     "https://www.lfu.bayern.de/gdi/wfs/laerm",
 )
 
-# --- Rent estimation -------------------------------------------------------
-# The "price" comfort factor is resolved through a chain (see pipeline.rents):
-#   1. real open per-area rent geodata where it exists (Munich district
-#      Mietspiegel spatial join, Berlin Wohnlagen WFS),
-#   2. an extensible BORIS land-value proxy (open Bodenrichtwerte zones),
-#   3. otherwise a city-average anchored estimate whose intra-city variation is
-#      driven by transport connectivity + business density + centre access
-#      (NOT a plain distance-from-centre gradient).
-CITY_RENTS_FILE = DATA_DIR / "city_rents.csv"
-# Munich per-district Mietspiegel (real). Values euro/m2 per Stadtbezirk.
-MIETSPIEGEL_CSV = DATA_DIR / "mietspiegel_districts.csv"
-# Berlin Wohnlage (einfach/mittel/gut) -> euro/m2 anchor table.
-BERLIN_WOHNLAGEN_CSV = DATA_DIR / "berlin_wohnlagen.csv"
-# Intra-city spread around the city average: centre is pricier, edge cheaper.
-# Also used as the euro band [avg*EDGE, avg*CENTER] for the estimate and for
-# anchoring relative (proxy) surfaces such as BORIS land values.
-RENT_CENTER_MULT = 1.4
-RENT_EDGE_MULT = 0.8
-# National fallback average (EUR/m2) for cities missing from the table.
-RENT_BASE_DEFAULT = 10.5
-
-# Weights for the multi-factor rent estimate (fallback tier). They express how
-# strongly each already-computed factor lifts local rent above the city floor.
-# Need not sum to 1 exactly; they are renormalised at use time.
-RENT_ESTIMATE_WEIGHTS = {
-    "transport": 0.45,  # connectivity to the transit network (least radial)
-    "business": 0.35,  # local density of shops/offices/amenities
-    "center": 0.20,  # poly-centric access to detected centres (inverted)
-}
-
-# --- Open rent data sources ------------------------------------------------
-# Munich Stadtbezirke (admin_level=9) fetched via Overpass and matched by name
-# to MIETSPIEGEL_CSV. Slugs that this provider applies to.
-MUNICH_SLUGS = {"muenchen", "munich"}
-MUNICH_DISTRICT_ADMIN_LEVEL = "9"
-
-# Berlin Wohnlagen open WFS ("Wohnlagen nach Adressen zum Berliner Mietspiegel
-# 2024", dl-de-zero-2.0). Address-point residential-location classes.
-BERLIN_SLUGS = {"berlin"}
-BERLIN_WOHNLAGEN_WFS = os.environ.get(
-    "BERLIN_WOHNLAGEN_WFS",
-    "https://gdi.berlin.de/services/wfs/wohnlagenadr2024",
+# --- Observed housing prices ------------------------------------------------
+# Kaltmiete is the Zensus 2022 100 m net cold rent (or a cited publication),
+# moved forward with the national Destatis Nettokaltmiete index. Asking rent
+# and sale prices are separate nullable fields. Nothing is invented from
+# infrastructure, land value, or a neighbour.
+ZENSUS_RENT_ZIP_URL = (
+    "https://www.destatis.de/static/DE/zensus/gitterdaten/Zensus2022_Durchschn_Nettokaltmiete.zip"
 )
-
-# BORIS land-value (Bodenrichtwerte) proxy. Coverage is per-Bundesland and each
-# state exposes a different open service/schema, so this is an extensible
-# registry rather than a single API. Keyed by Bundesland code; a couple of
-# states are wired as working examples. ``value_field`` is the numeric land
-# value (EUR/m2 of plot) used as a RELATIVE surface (anchored to the city
-# average rent). ``typename`` may be None to auto-discover from GetCapabilities.
-BORIS_SOURCES: dict[str, dict] = {
-    # Berlin Bodenrichtwerte open WFS (dl-de-zero-2.0). Used only if the richer
-    # Wohnlagen provider is unavailable.
-    "BE": {
-        "wfs": "https://gdi.berlin.de/services/wfs/brw2024",
-        "typename": None,
-        "value_field": "brw",
-    },
-    # Brandenburg BORIS open WFS (dl-de/by-2-0, BRM 3.0.1 object model).
-    "BB": {
-        "wfs": "https://isk.geobasis-bb.de/ows/boris_wfs",
-        "typename": None,
-        "value_field": "brw",
-    },
-}
-# Rough city-slug -> Bundesland code map used to pick a BORIS source. Extend as
-# needed; unknown cities simply skip the BORIS tier.
-CITY_BUNDESLAND = {
-    "berlin": "BE",
-    "potsdam": "BB",
-    "cottbus": "BB",
-    "brandenburg-an-der-havel": "BB",
-}
+ZENSUS_RENT_CSV_NAME = "Zensus2022_Durchschn_Nettokaltmiete_100m-Gitter.csv"
+DESTATIS_RENT_INDEX_URL = "https://www.destatis.de/DE/Themen/Wirtschaft/Konjunkturindikatoren/Basisdaten/vpi044a.html"
+ZENSUS_RENT_YEAR = 2022
+ZENSUS_RENT_MONTH = 5
+GREIX_ASKING_XLSX_URL = (
+    "https://www.kielinstitut.de/fileadmin/Dateiverwaltung/IfW_Unit/Macroeconomics/"
+    "GREIX/Mietpreisindex/City_metrics_public.xlsx"
+)
+OBSERVED_PRICES_CSV = DATA_DIR / "observed_prices.csv"
 
 # --- 15-Minute Living Score (objective-v2) ---------------------------------
 # Absolute objective weights (no centrality). Frontend Personal Match may
@@ -455,6 +399,8 @@ GTFS_CACHE_DIR.mkdir(exist_ok=True)
 # --- Zensus ----------------------------------------------------------------
 ZENSUS_CACHE_DIR = DATA_DIR / "zensus"
 ZENSUS_CACHE_DIR.mkdir(exist_ok=True)
+MARKET_CACHE_DIR = DATA_DIR / "market"
+MARKET_CACHE_DIR.mkdir(exist_ok=True)
 
 # --- New factor cache files ------------------------------------------------
 DAILY_NEEDS_FILE = "factor_daily_needs.parquet"

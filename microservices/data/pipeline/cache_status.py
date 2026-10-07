@@ -18,17 +18,9 @@ _LEGACY_CACHE = {
 # Meta keys a served city must carry regardless of pipeline version.
 _REQUIRED_META = ("rent_source", "city_type")
 
-# Properties the pipeline only writes when its optional inputs were available.
-# The schema cannot require them, but a city is not servable without them.
-_SERVED_CITY_PROPERTIES = (
-    "rent_eur_m2",
-    "s_rent_relative_city",
-    "s_rent_absolute",
-    "data_quality",
-    "s_value_opportunity",
-    "voi_class",
-    "voi_confidence",
-)
+# data_quality is written for every hex. Rent and VOI are omitted where no
+# Kaltmiete was published, so they are not required on the first feature.
+_SERVED_CITY_PROPERTIES = ("data_quality",)
 
 
 def _parquet_nrows(path: Path) -> int | None:
@@ -72,8 +64,8 @@ def _geojson_reason(data: dict) -> str | None:
     """Contract + freshness checks on an already parsed hexes.geojson."""
     meta = data.get("meta") or {}
 
-    if not meta.get("has_rent"):
-        return "has_rent is false"
+    if "has_rent" not in meta:
+        return "meta missing has_rent"
     for key in _REQUIRED_META:
         if not meta.get(key):
             return f"meta missing {key}"
@@ -103,6 +95,10 @@ def _geojson_reason(data: dict) -> str | None:
     for key in _SERVED_CITY_PROPERTIES:
         if key not in props:
             return f"geojson missing {key}"
+    if meta.get("has_rent"):
+        observed = any((feature.get("properties") or {}).get("rent_eur_m2") not in (None, "") for feature in features)
+        if not observed:
+            return "has_rent but no rent_eur_m2"
 
     # Flat noise across the whole city usually means roads never loaded.
     noise_spread = meta.get("noise_db_spread")

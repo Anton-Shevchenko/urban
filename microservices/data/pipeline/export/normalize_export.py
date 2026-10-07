@@ -30,8 +30,6 @@ from pipeline.export.score_scales import (
     rent_kalt_strict,
     rent_percentile_score,
     rent_value_score,
-    rent_warm_lenient,
-    rent_warm_strict,
     traffic_safety_score,
     traffic_safety_strict,
 )
@@ -42,8 +40,6 @@ from pipeline.ingest.centers import load_centers
 STEP = "normalize"
 
 P_LOW, P_HIGH = 5, 95
-DEFAULT_RENT_AREA_M2 = 60
-DEFAULT_NEBENKOSTEN_EUR_M2 = 4.0
 
 
 def _scale(series: pd.Series, invert: bool, log_compress: bool = False) -> pd.Series:
@@ -77,7 +73,8 @@ def _rent_absolute_legacy(rent: pd.Series) -> pd.Series:
     )
     mask = (r > 25) & (r < 30)
     score = np.where(mask, 25.0 * (30.0 - r) / 5.0, score)
-    return pd.Series(score, index=r.index).round(1)
+    out = pd.Series(score, index=r.index).round(1)
+    return out.where(np.isfinite(r))
 
 
 def _green_scores(df: pd.DataFrame) -> tuple[pd.Series, pd.Series]:
@@ -213,7 +210,7 @@ def build(ctx: CityContext) -> gpd.GeoDataFrame:
     rents_path = ctx.cache(config.RENTS_FILE)
     if rents_path.exists():
         rents = pd.read_parquet(rents_path)
-        df = df.merge(rents, on="h3_index")
+        df = df.merge(rents, on="h3_index", how="left")
 
     ensure_city_context(ctx)
     city_type = ctx.city_type or "LARGE_CITY"
@@ -354,11 +351,6 @@ def build(ctx: CityContext) -> gpd.GeoDataFrame:
         df["s_rent_absolute"] = df["s_rent_kalt_benchmark"]
         df["s_rent_strict"] = rent_kalt_strict(df["rent_eur_m2"])
         df["s_rent_absolute_legacy"] = _rent_absolute_legacy(df["rent_eur_m2"])
-        df["rent_monthly_est"] = (
-            (df["rent_eur_m2"] + DEFAULT_NEBENKOSTEN_EUR_M2) * DEFAULT_RENT_AREA_M2
-        ).round(0)
-        df["s_rent_warm"] = rent_warm_lenient(df["rent_monthly_est"])
-        df["s_rent_warm_strict"] = rent_warm_strict(df["rent_monthly_est"])
         df["s_rent_value"] = rent_value_score(
             df["s_rent_relative_city"],
             df["s_transit"],
@@ -421,13 +413,21 @@ _ROUND = {
     "voi_fair_rent_max": 2,
     "voi_fair_rent_median": 2,
     "voi_expected_rent_eur_m2": 2,
+    "asking_rent_eur_m2": 2,
+    "sale_eur_m2": 0,
 }
-_INT_KEYS = frozenset({"urban_activity", "business_count", "voi_highlight"})
+_INT_KEYS = frozenset({"urban_activity", "business_count", "voi_highlight", "rent_year"})
 _STRING_KEYS = frozenset(
     {
         "h3",
         "rent_source",
         "rent_confidence",
+        "rent_as_of",
+        "rent_resolution",
+        "asking_rent_source",
+        "asking_rent_as_of",
+        "sale_source",
+        "sale_as_of",
         "data_quality",
         "voi_class",
         "voi_confidence",
@@ -477,7 +477,9 @@ def _feature_properties(row: pd.Series) -> dict:
         raw = _cell(row, key)
         if raw is None:
             if key in required:
-                raise contract.ContractError(f"required property {key} missing on hex {row.get('h3_index')}")
+                if key not in row.index:
+                    raise contract.ContractError(f"required property {key} missing on hex {row.get('h3_index')}")
+                props[key] = None
             continue
         props[key] = _jsonify(key, raw)
     for key, raw in row.items():
@@ -516,14 +518,16 @@ def export(ctx: CityContext, df: gpd.GeoDataFrame) -> None:
     out_path = ctx.out_geojson
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
-    if not ctx.rent_source and "rent_source" in df.columns:
-        ctx.rent_source = (
-            str(df["rent_source"].dropna().iloc[0]) if df["rent_source"].notna().any() else ctx.rent_source
-        )
-    if "rent_confidence" in df.columns:
-        conf = df["rent_confidence"].dropna()
-        if len(conf) and conf.iloc[0] == "low":
-            ctx.rent_estimated = True
+    observed = (
+        pd.to_numeric(df["rent_eur_m2"], errors="coerce") if "rent_eur_m2" in df.columns else pd.Series(dtype=float)
+    )
+    ctx.has_rent = bool(observed.notna().any())
+    ctx.rent_estimated = False
+    if "rent_source" in df.columns and df["rent_source"].notna().any():
+        sources = [str(value) for value in df["rent_source"].dropna().unique()]
+        ctx.rent_source = sources[0] if len(sources) == 1 else "beobachtete Kaltmiete"
+    elif not ctx.rent_source:
+        ctx.rent_source = "keine Beobachtung"
 
     features = [
         {

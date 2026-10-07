@@ -27,11 +27,6 @@ from .providers import NOMINATIM
 
 STEP = "city"
 
-# Slugs that ship with REAL rent data (Munich Mietspiegel). Every other city
-# still gets an estimated rent layer (curated average + intra-city gradient),
-# so these slugs only control the ``rent_estimated`` flag / attribution.
-_RENT_SLUGS = {"muenchen", "munich"}
-
 _UMLAUTS = {"ä": "ae", "ö": "oe", "ü": "ue", "ß": "ss"}
 
 
@@ -59,8 +54,8 @@ class CityContext:
     center: tuple[float, float]  # (lat, lng)
     bbox: tuple[float, float, float, float]  # (south, west, north, east)
     boundary_geojson: dict | None = None
-    has_rent: bool = True  # every city now gets an (approximate) rent layer
-    rent_estimated: bool = True  # False only for cities with real Mietspiegel data
+    has_rent: bool = False  # true only after an observed Kaltmiete is attached
+    rent_estimated: bool = False  # prices are never modelled
     rent_source: str = ""  # provenance label, set by pipeline.rents
     centers: list = field(default_factory=list)  # detected centres (main + sub)
     population: int = 0
@@ -134,8 +129,8 @@ def munich_context() -> CityContext:
         name="München",
         center=config.MARIENPLATZ,
         bbox=config.MUNICH_BBOX,
-        has_rent=True,
-        rent_estimated=False,  # real Munich Mietspiegel
+        has_rent=False,
+        rent_estimated=False,
     )
     return attach_city_context(ctx)
 
@@ -192,9 +187,6 @@ def resolve_city(query: str) -> CityContext:
 
     name = _short_name(r, query)
     slug = slugify(name)
-    # Every city gets a rent layer; it is "real" only for Munich, "estimated"
-    # (curated average + gradient) for everyone else.
-    rent_estimated = slug not in _RENT_SLUGS
 
     nom_pop = None
     extratags = r.get("extratags") or {}
@@ -213,8 +205,8 @@ def resolve_city(query: str) -> CityContext:
         center=center,
         bbox=bbox,
         boundary_geojson=geom,
-        has_rent=True,
-        rent_estimated=rent_estimated,
+        has_rent=False,
+        rent_estimated=False,
     )
     # Persist the boundary so grid.py can reuse it without re-geocoding.
     with open(ctx.cache(config.BOUNDARY_FILE), "w", encoding="utf-8") as fh:
@@ -223,7 +215,7 @@ def resolve_city(query: str) -> CityContext:
     from .city_context import attach_city_context
 
     attach_city_context(ctx, nominatim_population=nom_pop)
-    log(STEP, f"resolved '{query}' -> {name} (slug={slug}, rent_estimated={rent_estimated})")
+    log(STEP, f"resolved '{query}' -> {name} (slug={slug})")
     return ctx
 
 
@@ -252,8 +244,9 @@ def ctx_from_cache(slug: str) -> CityContext | None:
         name=meta.get("name", slug),
         center=tuple(meta.get("center", (0.0, 0.0))),
         bbox=tuple(meta.get("bbox", (0.0, 0.0, 0.0, 0.0))),
-        has_rent=True,
-        rent_estimated=meta.get("rent_estimated", meta["slug"] not in _RENT_SLUGS),
+        has_rent=bool(meta.get("has_rent", False)),
+        rent_estimated=bool(meta.get("rent_estimated", False)),
+        rent_source=meta.get("rent_source") or "",
         centers=meta.get("centers", []),
         population=int(meta.get("population") or 0),
         city_type=meta.get("city_type") or "",

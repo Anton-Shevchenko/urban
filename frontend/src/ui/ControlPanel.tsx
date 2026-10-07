@@ -144,7 +144,7 @@ export function ControlPanel({ onClose }: Props) {
       {hasRent && (
         <section className="sliders">
           <span className="section-label">Optional: Budget-Filter</span>
-          <p className="section-hint">Dimmt Gebiete über dem Budget — ändert den Infrastruktur-Score nicht.</p>
+          <p className="section-hint">Dimmt Gebiete, deren beobachtete Kaltmiete über dem Budget liegt.</p>
           <div className="rent-budget">
             <label className="budget-field">
               <span>Wohnfläche (m²)</span>
@@ -158,7 +158,7 @@ export function ControlPanel({ onClose }: Props) {
               />
             </label>
             <label className="budget-field">
-              <span>Max. Warmmiete (€/Monat)</span>
+              <span>Max. Kaltmiete (€/Monat)</span>
               <input
                 type="number"
                 min={0}
