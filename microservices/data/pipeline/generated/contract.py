@@ -767,14 +767,4 @@ HEX_WALK_MINUTE_KEYS: dict[str, str] = {   'supermarket': 'dn_supermarket_min',
     'playground': 'dn_playground_min',
     'center': 'center_min'}
 
-HEX_SCALAR_KEYS: tuple[str, ...] = (   'h3',
-    's_living',
-    'rent_eur_m2',
-    'rent_source',
-    'rent_as_of',
-    'asking_rent_eur_m2',
-    'asking_rent_source',
-    'sale_eur_m2',
-    'sale_source',
-    'voi_class',
-    'voi_explain')
+HEX_SCALAR_KEYS: tuple[str, ...] = ('h3', 's_living', 'rent_eur_m2', 'voi_class', 'voi_explain')
