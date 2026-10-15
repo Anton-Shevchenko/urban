@@ -42,6 +42,9 @@ export function ControlPanel({ onClose }: Props) {
     if (mapView === 'cycleways') {
       return 'Radwege · nur baulich getrennt (highway=cycleway, cycleway=track) · kein Radfahrstreifen · OpenStreetMap-Linien, keine Hex-Füllung';
     }
+    if (mapView === 'price') {
+      return 'Kaltmiete · nur beobachtete Nettokaltmiete · stadtrelativ, günstig = hoch · grau = keine Beobachtung · keine Schätzung';
+    }
     return (
       'Infrastruktur · Läden, Cafés, Ärzte, Schulen u. a. · absolute 0–100 · 85–100 Excellent · 70–84 Good · 55–69 Average · 40–54 Below average · 0–39 Poor · grau = Insufficient data'
     );
@@ -49,6 +52,7 @@ export function ControlPanel({ onClose }: Props) {
 
   const mapViewLabel = mapViewOptions.find((o) => o.value === mapView)?.label || 'Infrastruktur';
   const streetOverlay = mapView === 'cycleways';
+  const rentFill = mapView === 'price';
 
   useEffect(() => {
     const bar = document.getElementById('legend-bar');
@@ -195,6 +199,11 @@ export function ControlPanel({ onClose }: Props) {
         {streetOverlay ? (
           <div className="legend-scale">
             <span>Getrennte Radwege</span>
+          </div>
+        ) : rentFill ? (
+          <div className="legend-scale">
+            <span>0 teuer</span>
+            <span>100 günstig</span>
           </div>
         ) : (
           <div className="legend-scale">

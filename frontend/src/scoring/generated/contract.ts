@@ -437,7 +437,7 @@ export const METRIC_LABELS: Record<string, string> = {
   traffic_safety: 'Straßenrisiko',
   housing: 'Wohnalter',
   density: 'Dichte',
-  price: 'Miete (stadtrelativ)',
+  price: 'Kaltmiete',
   cycleways: 'Radwege',
 };
 
@@ -458,5 +458,6 @@ export const PILLAR_LABELS: Record<string, string> = {
 };
 
 export const MAP_VIEW_METRICS: string[] = [
+  'price',
   'cycleways',
 ];

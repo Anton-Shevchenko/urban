@@ -6,10 +6,12 @@ describe('buildMapViewOptions', () => {
   it('always lists contract map-view overlays', () => {
     const opts = buildMapViewOptions({
       daily_life: 'Infrastruktur',
+      price: 'Kaltmiete',
       cycleways: 'Radwege',
     });
-    expect(opts.map((o) => o.value)).toEqual(['objective', 'cycleways']);
-    expect(opts[1]?.label).toBe('Radwege');
+    expect(opts.map((o) => o.value)).toEqual(['objective', 'price', 'cycleways']);
+    expect(opts[1]?.label).toBe('Kaltmiete');
+    expect(opts[2]?.label).toBe('Radwege');
   });
 });
 

@@ -201,6 +201,8 @@ def test_pipeline_registry_matches_run_steps():
     assert cache_status._REQUIRED_CACHE == set(generated.REQUIRED_CACHE_FILES)
 
 
-def test_map_view_metrics_are_cycleways_first():
-    assert generated.MAP_VIEW_METRICS == ("cycleways",)
+def test_map_view_metrics_list_rent_then_cycleways():
+    assert generated.MAP_VIEW_METRICS == ("price", "cycleways")
+    assert generated.METRIC_SCORE_PROPS["price"] == "s_rent_relative_city"
+    assert generated.METRIC_LABELS["price"] == "Kaltmiete"
     assert generated.METRIC_SCORE_PROPS["cycleways"] == "s_cycleways"

@@ -171,3 +171,20 @@ describe('cycleways map overlay', () => {
     expect(engine.comfortScalar({ h3: 'test', s_cycleways: 74 })).toBe(74);
   });
 });
+
+describe('price map overlay', () => {
+  it('reads city-relative Kaltmiete and does not invent a score', () => {
+    const ctx = createContextFromFeatures([], {});
+    ctx.mapMetricMode = 'price';
+    ctx.maxMonthlyBudget = 900;
+    ctx.desiredAreaM2 = 60;
+    const engine = createScoringEngine(ctx, []);
+    const cheap = { h3: 'a', s_rent_relative_city: 80, rent_eur_m2: 10 };
+    const dear = { h3: 'b', s_rent_relative_city: 20, rent_eur_m2: 25 };
+    expect(engine.factorScalar('price', cheap)).toBe(80);
+    expect(engine.factorScalar('price', {})).toBeNull();
+    expect(engine.comfortScalar(cheap)).toBe(80);
+    expect(engine.comfortScalar(dear)).toBeCloseTo(11, 5);
+    expect(engine.comfortScalar({})).toBeNull();
+  });
+});

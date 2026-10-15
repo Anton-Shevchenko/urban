@@ -62,11 +62,12 @@ describe('generated contract matches contracts/scoring.json', () => {
   it('keeps SCORE_PROPS aligned with the metric registry', () => {
     expect(SCORE_PROPS.daily_life).toBe('s_daily_life');
     expect(SCORE_PROPS.housing_affordability).toBe('s_rent_kalt_benchmark');
+    expect(SCORE_PROPS.price).toBe('s_rent_relative_city');
     expect(SCORE_PROPS.cycleways).toBe('s_cycleways');
   });
 
-  it('lists cycleways as the first extra map-view overlay', () => {
-    expect(MAP_VIEW_METRICS).toEqual(['cycleways']);
+  it('lists Kaltmiete and cycleways as extra map-view overlays', () => {
+    expect(MAP_VIEW_METRICS).toEqual(['price', 'cycleways']);
   });
 });
 

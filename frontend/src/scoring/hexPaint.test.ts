@@ -7,7 +7,7 @@ import {
   createScoringEngine,
   PRESETS,
 } from './engine';
-import { isPrimaryPaintView, isStreetOverlayView, scoreHexPaint, serializeScoringContext } from './hexPaint';
+import { isPrimaryPaintView, isRentFillView, isStreetOverlayView, scoreHexPaint, serializeScoringContext } from './hexPaint';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const geo = JSON.parse(
@@ -25,11 +25,15 @@ describe('isPrimaryPaintView', () => {
     expect(isPrimaryPaintView('green')).toBe(false);
     expect(isPrimaryPaintView('housing_value')).toBe(false);
     expect(isPrimaryPaintView('cycleways')).toBe(false);
+    expect(isPrimaryPaintView('price')).toBe(false);
   });
 
-  it('treats cycleways as a street overlay, not a hex fill', () => {
+  it('treats cycleways as a street overlay and Kaltmiete as a hex fill', () => {
     expect(isStreetOverlayView('cycleways')).toBe(true);
     expect(isStreetOverlayView('objective')).toBe(false);
+    expect(isStreetOverlayView('price')).toBe(false);
+    expect(isRentFillView('price')).toBe(true);
+    expect(isRentFillView('cycleways')).toBe(false);
   });
 });
 
@@ -93,6 +97,36 @@ describe('scoreHexPaint', () => {
         expect(out.scores[i]).toBeCloseTo(expected, 5);
       }
     }
+  });
+
+  it('paints city-relative Kaltmiete and leaves unpublished hexes empty', () => {
+    const ctx = createContextFromFeatures([], {});
+    const hexes = [
+      { h3: 'a', s_rent_relative_city: 80, rent_eur_m2: 12 },
+      { h3: 'b' },
+    ];
+    const out = scoreHexPaint({
+      ctx: serializeScoringContext(ctx),
+      hexes,
+      paintMapView: 'price',
+    });
+    expect(out.scores[0]).toBeCloseTo(80, 5);
+    expect(out.passed[0]).toBe(1);
+    expect(Number.isNaN(out.scores[1])).toBe(true);
+    expect(out.passed[1]).toBe(0);
+  });
+
+  it('dims an over-budget Kaltmiete fill without replacing the rent score', () => {
+    const ctx = createContextFromFeatures([], {});
+    ctx.maxMonthlyBudget = 400;
+    ctx.desiredAreaM2 = 50;
+    const out = scoreHexPaint({
+      ctx: serializeScoringContext(ctx),
+      hexes: [{ h3: 'a', s_rent_relative_city: 80, rent_eur_m2: 20 }],
+      paintMapView: 'price',
+    });
+    expect(out.scores[0]).toBeCloseTo(44, 5);
+    expect(out.passed[0]).toBe(1);
   });
 
   it('preset does not change objective paint scores', () => {

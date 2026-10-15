@@ -692,7 +692,7 @@ METRIC_LABELS: dict[str, str] = {   'living': 'Infrastruktur',
     'traffic_safety': 'Straßenrisiko',
     'housing': 'Wohnalter',
     'density': 'Dichte',
-    'price': 'Miete (stadtrelativ)',
+    'price': 'Kaltmiete',
     'cycleways': 'Radwege'}
 
 METRIC_TYPES: dict[str, str] = {   'living': 'objective_positive',
@@ -742,14 +742,18 @@ METRIC_META: dict[str, Any] = {   'living': {   'source': 'composite',
                           'metric': 'accident_density',
                           'note': 'Straßenrisiko — keine Kriminalitätsdaten'},
     'housing': {'source': 'zensus_or_osm', 'confidence': 0.45, 'year': 2022},
-    'price': {'source': 'mixed', 'confidence': 0.5, 'year': 2026},
+    'price': {   'source': 'mixed',
+                 'confidence': 0.5,
+                 'year': 2026,
+                 'note': 'Hex-Füllung nur bei beobachteter Nettokaltmiete. Farbe ist '
+                         'stadtrelativ: günstig = hoch. Keine Schätzung, keine Straßenlinien.'},
     'cycleways': {   'source': 'osm_cycleway_track',
                      'confidence': 0.7,
                      'year': 2026,
                      'note': 'Nur baulich getrennte Radwege (highway=cycleway, '
                              'cycleway=track). Kein Radfahrstreifen.'}}
 
-MAP_VIEW_METRICS: tuple[str, ...] = ('cycleways',)
+MAP_VIEW_METRICS: tuple[str, ...] = ('price', 'cycleways')
 
 HEX_PILLAR_KEYS: dict[str, str] = {   'daily_life': 's_daily_life',
     'walk': 's_walk',

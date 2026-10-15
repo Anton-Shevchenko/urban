@@ -338,10 +338,16 @@
       "id": "price",
       "kind": "overlay",
       "score_key": "s_rent_relative_city",
-      "label": "Miete (stadtrelativ)",
+      "label": "Kaltmiete",
       "type": "objective_positive",
       "factor": "rents",
-      "meta": { "source": "mixed", "confidence": 0.5, "year": 2026 }
+      "map_view": true,
+      "meta": {
+        "source": "mixed",
+        "confidence": 0.5,
+        "year": 2026,
+        "note": "Hex-Füllung nur bei beobachteter Nettokaltmiete. Farbe ist stadtrelativ: günstig = hoch. Keine Schätzung, keine Straßenlinien."
+      }
     },
     {
       "id": "cycleways",

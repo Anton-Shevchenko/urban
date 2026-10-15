@@ -300,8 +300,8 @@ export function createScoringEngine(
     }
     if (key === 'urban_form') return num(p.s_urban_form);
     if (key === 'price') {
-      const budget = budgetAffordScalar(p, ctx);
-      if (budget != null) return budget;
+      // Observed city-relative Kaltmiete only. Budget dims in paintScalar
+      // and must not replace this score with an affordability stand-in.
       return num(p.s_rent_relative_city);
     }
     const prop = SCORE_PROPS[key];

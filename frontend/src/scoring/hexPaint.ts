@@ -34,6 +34,11 @@ export function isStreetOverlayView(paintMapView: string | null | undefined): bo
   return paintMapView === 'cycleways';
 }
 
+/** Hex fill of observed city-relative Kaltmiete. Not a street overlay. */
+export function isRentFillView(paintMapView: string | null | undefined): boolean {
+  return paintMapView === 'price';
+}
+
 /** Drop non-cloneable Maps so the context can be posted to a worker. */
 export function serializeScoringContext(ctx: ScoringContext): ScoringContext {
   return {
@@ -65,11 +70,14 @@ export function serializeScoringContext(ctx: ScoringContext): ScoringContext {
 
 export function scoreHexPaint(input: HexPaintInput): HexPaintOutput {
   const hexes = input.hexes;
+  const paintMapView = input.paintMapView;
+  const rentFill = isRentFillView(paintMapView);
   const engine = createScoringEngine(
-    input.ctx,
+    rentFill
+      ? { ...input.ctx, mapMetricMode: 'price', scoringMode: 'living', _diagnoseKey: null }
+      : input.ctx,
     hexes.map((properties) => ({ properties })),
   );
-  const paintMapView = input.paintMapView;
   const primary = isPrimaryPaintView(paintMapView);
   const pillarKey = paintMapView === 'housing_value' ? 'housing_affordability' : paintMapView;
   const scores = new Float32Array(hexes.length);
@@ -77,7 +85,9 @@ export function scoreHexPaint(input: HexPaintInput): HexPaintOutput {
 
   for (let i = 0; i < hexes.length; i++) {
     const src = hexes[i];
-    const c = primary ? engine.comfortScalar(src) : engine.factorScalar(pillarKey, src);
+    // Rent fill goes through comfortScalar so a budget still dims the
+    // city-relative score instead of hiding the hex grid.
+    const c = primary || rentFill ? engine.comfortScalar(src) : engine.factorScalar(pillarKey, src);
     if (c != null && Number.isFinite(c)) {
       scores[i] = c;
       passed[i] = 1;

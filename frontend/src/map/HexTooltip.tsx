@@ -50,10 +50,15 @@ export function HexTooltip({ model }: { model: HexTooltipModel }) {
     >
       {model.insufficient ? (
         <div className="tt-score">
-          <div className="tt-pass"><b>Insufficient data</b></div>
+          <div className="tt-pass"><b>{model.insufficientTitle || 'Insufficient data'}</b></div>
           <div className="tt-fail-msg">
-            Data confidence: {model.confidence}%
-            {model.missingData.length ? ` · missing: ${model.missingData.join(', ')}` : ''}
+            {model.insufficientDetail
+              || (
+                <>
+                  Data confidence: {model.confidence}%
+                  {model.missingData.length ? ` · missing: ${model.missingData.join(', ')}` : ''}
+                </>
+              )}
           </div>
         </div>
       ) : (
@@ -63,6 +68,7 @@ export function HexTooltip({ model }: { model: HexTooltipModel }) {
             <div className="tt-pass">
               <b>{model.headlineScore}/100</b> {model.headlineLabel}
             </div>
+            {model.caption ? <div className="tt-fail-msg">{model.caption}</div> : null}
             <div className="tt-fail-msg">
               Your Match: {model.match}/100 · City percentile: {model.percentile} · Data confidence: {model.confidence}%
             </div>

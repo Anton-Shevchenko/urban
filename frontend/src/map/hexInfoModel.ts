@@ -62,7 +62,7 @@ export function minutesOrNull(raw: unknown): number | null {
   return n;
 }
 
-function formatPriceLine(label: string, amount: unknown, source: unknown, asOf: unknown): string | null {
+export function formatPriceLine(label: string, amount: unknown, source: unknown, asOf: unknown): string | null {
   const value = Number(amount);
   if (!Number.isFinite(value) || value <= 0) return null;
   const digits = value >= 100 ? 0 : 1;
