@@ -13,10 +13,10 @@ help:
 	@echo "Targets:"
 	@echo "  make start                    — API + frontend + Go chat stack (docker compose)"
 	@echo "  make ollama                   — pull llama3.2:3b into native Ollama on the host"
-	@echo "  make stop                     — зупинити контейнери"
-	@echo "  make clear-cache              — скинути pipeline / Vite кеш"
-	@echo "  make generate CITY=Hamburg    — згенерувати кеш для міста"
-	@echo "  make generate-all             — перегенерувати всі міста з data/cities/"
+	@echo "  make stop                     — stop containers"
+	@echo "  make clear-cache              — clear the pipeline / Vite cache"
+	@echo "  make generate CITY=Hamburg    — generate the cache for a city"
+	@echo "  make generate-all             — regenerate every city under data/cities/"
 	@echo "  make proto                    — regenerate Go gRPC stubs"
 	@echo "  make test                     — run every test suite (go + python + web)"
 	@echo "  make test-go                  — run Go microservice tests"
@@ -26,7 +26,7 @@ help:
 	@echo "  make contract-check           — fail when generated contract code is stale"
 	@echo "  make proto-check              — fail when generated gRPC stubs are stale"
 	@echo ""
-	@echo "Аліаси: старт · стоп · скинути-кеш · генерувати · генерувати-всі"
+	@echo "Ukrainian aliases: старт · стоп · скинути-кеш · генерувати · генерувати-всі"
 
 start старт:
 	$(COMPOSE) up --build -d --remove-orphans
@@ -47,7 +47,7 @@ clear-cache скинути-кеш:
 	rm -rf microservices/data/data/cities/*/cache
 	rm -rf frontend/node_modules/.vite
 	find . -type d -name __pycache__ -not -path './.venv/*' -exec rm -rf {} + 2>/dev/null || true
-	@echo "Кеш очищено (data-service cache, Vite, __pycache__)"
+	@echo "Cache cleared (data-service cache, Vite, __pycache__)"
 
 generate генерувати:
 ifeq ($(strip $(CITY)),)

@@ -105,9 +105,9 @@ describe('scoring modules re-export the contract instead of redefining it', () =
   });
 });
 
-describe('hex property contract holds for the bundled export', () => {
+describe('hex property contract holds for the sample export', () => {
   const fixture = JSON.parse(
-    readFileSync(join(__dirname, '..', '..', 'public', 'data', 'hexes.geojson'), 'utf8'),
+    readFileSync(join(__dirname, 'fixtures', 'hexes.sample.geojson'), 'utf8'),
   ) as {
     meta?: { pipeline_version?: number; score_method_version?: string };
     features: { properties: Record<string, unknown> }[];

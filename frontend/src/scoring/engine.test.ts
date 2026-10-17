@@ -21,7 +21,7 @@ import { explainLivingScore } from './explain';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const geo = JSON.parse(
-  readFileSync(join(__dirname, '../../public/data/hexes.geojson'), 'utf8'),
+  readFileSync(join(__dirname, 'fixtures/hexes.sample.geojson'), 'utf8'),
 );
 const features = geo.features;
 const meta = geo.meta || {};

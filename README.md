@@ -1,148 +1,155 @@
-# 15-Minuten-Living-Score (Deutschland)
+# 15-minute living score (Germany)
 
-Interaktive Karte: **Wie gut lässt es sich hier ohne Auto leben?**
+Interactive map: **how well can you live here without a car?**
 
-Jedes Gebiet (H3-Hexagon, ~250 m) erhält einen erklärbaren Score **0–100**:
+Each area (an H3 hexagon, ~250 m) gets an explainable score from **0–100**:
 
-| Score | Bedeutung |
-|-------|-----------|
-| 0 | stark autoabhängig |
-| 100 | hochgradig fußläufig / 15-Minuten-Stadt |
+| Score | Meaning |
+|-------|---------|
+| 0 | strongly car-dependent |
+| 100 | highly walkable / a 15-minute city |
 
-## Score-Formel (aktuell: infra-only)
+## Score formula (current: infra-only)
 
-Gewichte stehen **nur** in [`contracts/scoring.json`](contracts/scoring.json).
-Auf diesem Branch ist der objektive Score **100 % Alltag** (`daily_life: 1.0`);
-die übrigen Säulen werden weiter exportiert, gehen aber mit Gewicht 0 ein.
+Weights live **only** in [`contracts/scoring.json`](contracts/scoring.json).
+On this branch the objective score is **100% daily life** (`daily_life: 1.0`);
+the other pillars are still exported, but they enter with weight 0.
 
-Die klassische 6-Säulen-Mischung (20/15/15/15/15/20) ist eine
-Einzeilen-Änderung in `scoring.json` + `python contracts/codegen.py`.
+The classic 6-pillar mix (20/15/15/15/15/20) is a one-line change in
+`scoring.json` plus `python contracts/codegen.py`.
 
-### Eine Quelle der Wahrheit
+### One source of truth
 
-Gewichte, Daily-Life-Gruppen und Walk-Bänder stehen **nur** in
-[`contracts/scoring.json`](contracts/scoring.json). Der Property-Vertrag von
-`hexes.geojson` steht in
+Weights, daily-life groups, and walk bands live **only** in
+[`contracts/scoring.json`](contracts/scoring.json). The property contract for
+`hexes.geojson` lives in
 [`contracts/hex-properties.schema.json`](contracts/hex-properties.schema.json).
-Pipeline-Schritte, Metric-IDs und Hex-Fact-Sheet stehen in
+Pipeline steps, metric ids, and the hex fact sheet live in
 [`contracts/metrics.json`](contracts/metrics.json).
 
 ```bash
-# Nach jeder Änderung an contracts/*.json:
-python contracts/codegen.py     # erzeugt Python-, TypeScript- und Go-Views
-make contract-check             # CI-Gate: generierter Code ist aktuell
+# After every change to contracts/*.json:
+python contracts/codegen.py     # writes the Python, TypeScript, and Go views
+make contract-check             # CI gate: generated code is current
 ```
 
-| Konsument | Generierte Datei |
-|-----------|------------------|
+| Consumer | Generated file |
+|----------|----------------|
 | Pipeline (Python) | `microservices/data/pipeline/generated/contract.py` |
-| Scoring-Engine (TS) | `frontend/src/scoring/generated/contract.ts` |
-| Go-Services | `gen/contract/contract.go` |
+| Scoring engine (TS) | `frontend/src/scoring/generated/contract.ts` |
+| Go services | `gen/contract/contract.go` |
 
-Persönliche Profile (`PRESETS`) sind bewusst **nicht** Teil des Vertrags: sie
-verändern nur `personalMatchScore` und leben in
+Personal profiles (`PRESETS`) are deliberately **not** part of the contract:
+they only change `personalMatchScore` and live in
 `frontend/src/scoring/formulas.ts`.
 
-### Alltag (Daily Life)
+### Daily life
 
-Gehzeit-Zugänglichkeit mit piecewise Walk-Band (nicht exponentiell):
+Walk-time accessibility with a piecewise walk band (not exponential):
 
 `0–5 min → 100 · 10 → 70 · 15 → 30 · ≥20 → 0`
 
-Gruppen: Food 30% · Education 20% · Health 15% · Services 15% · Restaurants/Cafés 10% · Leisure 10%.  
-Innerhalb einer Gruppe sind die Kategorien gewichtet (nicht «beste zählt»),
-siehe `daily_life.category_weights` im Vertrag. Parks gehören zum Grün-Index.
+Groups: Food 30% · Education 20% · Health 15% · Services 15% · Restaurants/Cafés 10% · Leisure 10%.
+Inside a group, categories are weighted (not “best one wins”);
+see `daily_life.category_weights` in the contract. Parks belong to the green index.
 
-### Gehqualität
+### Walking quality
 
-Straßennetz, Sicherheit, Komfort, Barrierefreiheit → `s_walk`.
+Street network, safety, comfort, accessibility → `s_walk`.
 
-### Grün
+### Green
 
-40% Parkdistanz (+ Fläche) · 30% Grünanteil · 20% Baumkronen · 10% Wasser → `s_green`.
+40% park distance (+ area) · 30% green share · 20% tree canopy · 10% water → `s_green`.
 
-### ÖPNV
+### Transit
 
-Distanz + Takt + Konnektivität (GTFS wenn verfügbar, sonst OSM) → `s_transit`.
+Distance + headway + connectivity (GTFS when available, otherwise OSM) → `s_transit`.
 
-### Ruhe
+### Quiet
 
-Lärm → Quiet-Score (höher = ruhiger) → `s_quiet`.
+Noise → quiet score (higher = quieter) → `s_quiet`.
 
-### Bezahlbarkeit
+### Affordability
 
-Absolute Kaltmieten-Benchmark (nicht stadt-relativ) → `s_housing_affordability`.
-`s_housing_value` ist nur ein Alias davon; Alltag/ÖPNV/Gehqualität werden hier
-**nicht** eingemischt, sonst würden sie doppelt zählen.
+Absolute Kaltmiete benchmark (not city-relative) → `s_housing_affordability`.
+`s_housing_value` is only an alias of that; daily life, transit, and walking
+quality are **not** mixed in here, or they would be counted twice.
 
-### Zentralität (informativ, Gewicht 0)
+### Centrality (informative, weight 0)
 
-Nähe zu (polyzentrischen) Zentren → `s_center`.
+Proximity to (polycentric) centres → `s_center`.
 
-### Kartenansicht (Overlays)
+### Map view (overlays)
 
-Zusätzlich zum Infrastruktur-Score kann die Karte **Overlay-Metriken** einfärben.
-Die erste (und vorerst einzige) Option: **Radwege** — nur baulich getrennte
-Wege aus OSM (`highway=cycleway`, `cycleway=track`). Radfahrstreifen auf der
-Fahrbahn zählen nicht. Overlay-Scores gehen **nicht** in den Living Score ein.
+Besides the infrastructure score, the map can colour **overlay metrics**.
+The first option is **cycleways** — only physically separated ways from OSM
+(`highway=cycleway`, `cycleway=track`). Painted lanes on the carriageway do
+not count. Overlay scores do **not** enter the living score.
 
-Registriert in [`contracts/metrics.json`](contracts/metrics.json) mit
+Registered in [`contracts/metrics.json`](contracts/metrics.json) with
 `"map_view": true`.
 
-## Profile
+## Profiles
 
-Auf diesem Branch sind alle Profile Kopien der objektiven Gewichte (100 % Alltag).
-`PRESETS` in `frontend/src/scoring/formulas.ts` remixen nur `personalMatchScore`,
-sobald die Säulen-Gewichte in `scoring.json` wieder ungleich null sind.
+On this branch every profile is a copy of the objective weights (100% daily life).
+`PRESETS` in `frontend/src/scoring/formulas.ts` remix only `personalMatchScore`,
+once the pillar weights in `scoring.json` are non-zero again.
 
-## Datenquellen
+## Data sources
 
-- OpenStreetMap (POI, Straßen, Grün, Landuse)
+- OpenStreetMap (POIs, streets, green, land use)
 - GTFS / Mobilithek
-- Zensus / Destatis (Dichte)
-- Kommunale Open Data (Miete wo verfügbar)
+- Census / Destatis (density)
+- Municipal open data (rent where available)
 
 ## Pipeline
 
-Schema-Version: `x-pipeline-version` in `contracts/hex-properties.schema.json`.
-Ältere Caches werden von `pipeline.cache_status` erkannt und neu erzeugt.
+Schema version: `x-pipeline-version` in `contracts/hex-properties.schema.json`.
+Older caches are detected by `pipeline.cache_status` and rebuilt.
+
+City GeoJSON is generated, not committed. `make generate` writes a city under
+`microservices/data/data/cities/` (gitignored). For München it also copies
+`hexes.geojson` and `cycleways.geojson` into `frontend/public/data/` so the
+home map and the frontend image can serve them locally. Those copies are
+gitignored too. Tests use the small sample in
+`frontend/src/scoring/fixtures/hexes.sample.geojson`.
 
 ```bash
 python3 -m venv .venv
 ./.venv/bin/pip install -e "./microservices/data[dev]"
 
-# München → frontend/public/data/hexes.geojson
+# München → frontend/public/data/hexes.geojson (gitignored)
 ./.venv/bin/python -m pipeline
 
-# Beliebige deutsche Stadt
+# Any German city
 ./.venv/bin/python -m pipeline "Hamburg"
 
-# Nach einem Abbruch: abgeschlossene Schritte werden übersprungen
+# After an interrupt: finished steps are skipped
 ./.venv/bin/python -m pipeline "Hamburg"
 
-# Alles neu rechnen
+# Recompute everything
 ./.venv/bin/python -m pipeline "Hamburg" --force
 ```
 
-Siehe [microservices/data/README.md](microservices/data/README.md) für die
-Paketstruktur (`factors/`, `ingest/`, `export/`, …) und die HTTP-API.
+See [microservices/data/README.md](microservices/data/README.md) for the
+package layout (`factors/`, `ingest/`, `export/`, …) and the HTTP API.
 
-Der Export wird vor dem Schreiben gegen
-`contracts/hex-properties.schema.json` validiert — ein fehlendes oder falsch
-typisiertes Property bricht die Generierung ab, statt erst im Browser aufzufallen.
+The export is validated against `contracts/hex-properties.schema.json` before
+it is written. A missing or mistyped property fails generation instead of
+showing up first in the browser.
 
-Abgeschlossene Schritte stehen in `<stadt>/cache/.pipeline_state.json`. Das
-Manifest wird verworfen, sobald `x-pipeline-version` oder
-`score_method_version` sich ändern, damit ein Resume nie eine alte
-Vertragsversion konserviert. Alle externen Provider (Nominatim, Overpass, WFS,
-GTFS, Routing) laufen über `pipeline/providers.py` mit gemeinsamem
-Retry/Backoff und Throttling — Nominatim mit den vorgeschriebenen 1 req/s.
+Finished steps are recorded in `<city>/cache/.pipeline_state.json`. The
+manifest is dropped as soon as `x-pipeline-version` or `score_method_version`
+changes, so a resume never keeps an old contract version. All external
+providers (Nominatim, Overpass, WFS, GTFS, routing) go through
+`pipeline/providers.py` with shared retry/backoff and throttling — Nominatim
+at the required 1 req/s.
 
-Die API generiert auf einem `ThreadPoolExecutor` (`GENERATE_MAX_WORKERS`,
-Default 2) und legt den Job-Status in SQLite ab, sodass Polling einen Restart
-übersteht.
+The API generates on a `ThreadPoolExecutor` (`GENERATE_MAX_WORKERS`, default 2)
+and stores job status in SQLite, so polling survives a restart.
 
-Verteilung und Plausibilität eines Exports prüfen:
+Check the distribution and plausibility of an export (after `make generate`
+has written the München bundle):
 
 ```bash
 ./.venv/bin/python microservices/data/scripts/living_score_validation.py
@@ -154,7 +161,13 @@ Verteilung und Plausibilität eines Exports prüfen:
 cd frontend && npm install && npm run dev
 ```
 
-Hex-Chat uses **native Ollama** on the host (Metal on macOS), not the CPU
+The home page lists cities from the data API. `/city/:slug` loads that city's
+hexes from the API. For München, `make generate` also copies `hexes.geojson`
+and `cycleways.geojson` into `frontend/public/data/` (gitignored) so nginx
+can serve `/data/…`. `make start` builds the frontend image from that
+directory: generate first if the image should contain the static bundle.
+
+Hex chat uses **native Ollama** on the host (Metal on macOS), not the CPU
 container. Install [Ollama](https://ollama.com), then:
 
 ```bash
@@ -185,14 +198,14 @@ make contract-check
 make proto-check
 ```
 
-## Phase 2 (geplant)
+## Phase 2 (planned)
 
-- Echtes OSM-Fußgängernetz (osmnx) statt Euclidean×Detour
-- US Walk-Score-Kalibrierung (LR / RF / GBM)
-- Adressgenaue Routing-API
-- Stadtteil-Aggregation
+- A real OSM pedestrian network (osmnx) instead of Euclidean×detour
+- US Walk Score calibration (LR / RF / GBM)
+- Address-level routing API
+- District aggregation
 
-## Struktur
+## Layout
 
 ```
 contracts/                # scoring.json + metrics.json + hex schema + codegen
@@ -207,28 +220,29 @@ microservices/data/       # Python project (urban-data): pipeline + FastAPI
 docs/                     # architecture backlog
 ```
 
-### Neue Metrik
+### New metric
 
-1. Eintrag in [`contracts/metrics.json`](contracts/metrics.json) (id, `score_key`, factor-Modul, wave, labels).
-2. Falls es eine Säule ist: Gewicht in [`contracts/scoring.json`](contracts/scoring.json).
-3. Property-Typ in [`contracts/hex-properties.schema.json`](contracts/hex-properties.schema.json) (oder bump `x-pipeline-version`).
-4. `python contracts/codegen.py` — erzeugt Python/TS/Go inkl. `STEPS`/`WAVES`.
-5. `microservices/data/pipeline/factors/<id>.py` mit `main(ctx)`.
+1. Entry in [`contracts/metrics.json`](contracts/metrics.json) (id, `score_key`, factor module, wave, labels).
+2. If it is a pillar: weight in [`contracts/scoring.json`](contracts/scoring.json).
+3. Property type in [`contracts/hex-properties.schema.json`](contracts/hex-properties.schema.json) (or bump `x-pipeline-version`).
+4. `python contracts/codegen.py` — writes Python/TS/Go including `STEPS`/`WAVES`.
+5. `microservices/data/pipeline/factors/<id>.py` with `main(ctx)`.
 6. Tests + `make generate CITY=…`.
 
-### Neuer gRPC-Service
+### New gRPC service
 
 1. `proto/<name>/v1/<name>.proto`
 2. `make proto`
-3. `microservices/<name>/cmd/<name>-svc/` + `Dockerfile` (build context = Repo-Root, wie hex/llm)
-4. Modul in [`go.work`](go.work), Service in [`docker-compose.yml`](docker-compose.yml) mit `grpc_health_probe`
-5. Dial + HTTP-Route in [`gateway/cmd/gateway/main.go`](gateway/cmd/gateway/main.go)
-6. Öffentlich nur über Gateway `/v1/…` (nginx proxied das bereits)
+3. `microservices/<name>/cmd/<name>-svc/` + `Dockerfile` (build context = repo root, as with hex/llm)
+4. Module in [`go.work`](go.work), service in [`docker-compose.yml`](docker-compose.yml) with `grpc_health_probe`
+5. Dial + HTTP route in [`gateway/cmd/gateway/main.go`](gateway/cmd/gateway/main.go)
+6. Public only through the gateway `/v1/…` (nginx already proxies that)
 
-Export schreibt neben `hexes.geojson` auch `hexes.parquet` und `city-stats.json`
+The export writes `hexes.parquet` and `city-stats.json` next to `hexes.geojson`
 (`GET /api/city/{slug}/hexes.parquet`, `GET /api/city/{slug}/stats`). Vector tiles
-(PMTiles) sind der nächste Schritt, sobald tippecanoe im data-image liegt.
+(PMTiles) are the next step, once tippecanoe is in the data image.
 
-Weitere, nicht kritische Verbesserungen sind in
-[docs/architecture-backlog.md](docs/architecture-backlog.md) nach Priorität
-festgehalten.
+Further, non-critical improvements are listed by priority in
+[docs/architecture-backlog.md](docs/architecture-backlog.md).
+
+How to split a change is in [CONTRIBUTING.md](CONTRIBUTING.md).

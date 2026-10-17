@@ -6,8 +6,9 @@ __pycache__/
 .ruff_cache/
 *.egg-info/
 
-# Data-service generated artifacts. Bundled München GeoJSON lives in
-# frontend/public/data/hexes.geojson so the map works without a pipeline run.
+# Data-service generated artifacts. City GeoJSON, including the München
+# bundle under frontend/public/data/, is produced by `make generate` and
+# is not committed. Tests use frontend/src/scoring/fixtures/.
 microservices/data/data/cache/
 microservices/data/data/cities/
 microservices/data/data/gtfs/
@@ -18,6 +19,8 @@ microservices/data/data/wohnindex.db
 microservices/data/data/*.db-journal
 microservices/data/data/*.db-wal
 microservices/data/data/*.db-shm
+
+frontend/public/data/**/*.geojson
 
 # Node
 node_modules/

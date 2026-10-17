@@ -604,7 +604,8 @@ export function useWohnIndexStore(options: UseWohnIndexOptions = {}) {
     [loadCity],
   );
 
-  // Bootstrap from `/city/:slug`. Offline fallback: static München bundle.
+  // `/city/:slug` loads from the API. With no slug, read the local München
+  // bundle (`make generate`, gitignored) and say so when it is missing.
   useEffect(() => {
     const seq = ++cityLoadSeq.current;
     let cancelled = false;
@@ -624,7 +625,7 @@ export function useWohnIndexStore(options: UseWohnIndexOptions = {}) {
       } catch (err) {
         console.error(err);
         if (!cancelled && cityLoadSeq.current === seq) {
-          setLoadError('Fehler beim Laden der Kartendaten.');
+          setLoadError('Kartendaten fehlen. make generate ausführen oder eine Stadt öffnen.');
           setLoading(false);
         }
       } finally {
