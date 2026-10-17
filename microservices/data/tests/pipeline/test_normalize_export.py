@@ -38,6 +38,14 @@ def test_export_meta_carries_current_versions(exported):
     assert meta["living_score_weights"] == generated.OBJECTIVE_WEIGHTS
 
 
+def test_export_meta_sidecar_matches_geojson_meta(exported):
+    ctx = exported["ctx"]
+    sidecar = json.loads(ctx.meta_json.read_text(encoding="utf-8"))
+    assert sidecar == exported["data"]["meta"]
+    assert sidecar["product"]
+    assert sidecar["score_method_version"] == generated.SCORE_METHOD_VERSION
+
+
 def test_every_consumer_property_is_present(exported):
     props = exported["data"]["features"][0]["properties"]
     for consumer, keys in generated.CONSUMER_HEX_PROPERTIES.items():

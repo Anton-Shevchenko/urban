@@ -1,8 +1,8 @@
-"""SQLite persistence for generated city GeoJSON + meta.
+"""SQLite index of city metadata, plus the generation-job registry.
 
-Pipeline factor caches (parquet) stay on disk under data/cities/<slug>/cache/.
-Served city products (hexes.geojson + meta) are stored here for fast list/serve
-and survive across API restarts when the DB file is on a mounted volume.
+The city product lives only on disk: ``hexes.geojson`` (what the map and
+hex-svc read) and ``meta.json`` (the same meta object). This database stores
+that meta for fast list/status checks and does not keep a second GeoJSON copy.
 """
 
 from __future__ import annotations
@@ -20,6 +20,16 @@ from pipeline.common import log
 _DB_PATH = config.DATA_DIR / "wohnindex.db"
 _lock = threading.RLock()
 _initialized = False
+
+_CITIES_DDL = """
+CREATE TABLE cities (
+    slug TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    meta_json TEXT NOT NULL,
+    pipeline_version INTEGER NOT NULL DEFAULT 0,
+    updated_at TEXT NOT NULL
+)
+"""
 
 
 def connect() -> sqlite3.Connection:
@@ -43,80 +53,158 @@ def init_db() -> None:
             return
         conn = connect()
         try:
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS cities (
-                    slug TEXT PRIMARY KEY,
-                    name TEXT NOT NULL,
-                    meta_json TEXT NOT NULL,
-                    geojson TEXT NOT NULL,
-                    pipeline_version INTEGER NOT NULL DEFAULT 0,
-                    updated_at TEXT NOT NULL
-                )
-                """
-            )
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_cities_updated ON cities(updated_at DESC)")
-            conn.commit()
+            _ensure_schema(conn)
         finally:
             conn.close()
         _initialized = True
-    # Migrate outside the "first init" critical section; uses RLock safely.
-    _migrate_filesystem_cities()
+    # Index disk after the schema exists. RLock lets upsert re-enter init_db.
+    refresh_index()
 
 
-def _slug_exists(slug: str) -> bool:
+def _ensure_schema(conn: sqlite3.Connection) -> None:
+    """Create the metadata table, dropping a legacy GeoJSON blob column if present."""
+    row = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'cities'"
+    ).fetchone()
+    if row is None:
+        conn.execute(_CITIES_DDL)
+    else:
+        cols = {info["name"] for info in conn.execute("PRAGMA table_info(cities)")}
+        if "geojson" in cols:
+            conn.execute("ALTER TABLE cities RENAME TO cities_legacy")
+            conn.execute(_CITIES_DDL)
+            conn.execute(
+                """
+                INSERT INTO cities (slug, name, meta_json, pipeline_version, updated_at)
+                SELECT slug, name, meta_json, pipeline_version, updated_at
+                FROM cities_legacy
+                """
+            )
+            conn.execute("DROP TABLE cities_legacy")
+            log("db", "dropped legacy cities.geojson column")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_cities_updated ON cities(updated_at DESC)")
+    conn.commit()
+
+
+def _hexes_path(slug: str) -> Path:
+    return config.CITIES_DIR / slug / "hexes.geojson"
+
+
+def _meta_path(city_dir: Path) -> Path:
+    return city_dir / "meta.json"
+
+
+def _meta_mtime(city_dir: Path) -> float | None:
+    path = _meta_path(city_dir)
+    if not path.is_file():
+        return None
+    return path.stat().st_mtime
+
+
+def _stored_timestamp(updated_at: str | None) -> float | None:
+    if not updated_at:
+        return None
+    try:
+        return datetime.fromisoformat(updated_at).timestamp()
+    except ValueError:
+        return None
+
+
+def _meta_is_newer(city_dir: Path, updated_at: str | None) -> bool:
+    """True when meta.json is missing or newer than the indexed timestamp."""
+    mtime = _meta_mtime(city_dir)
+    if mtime is None:
+        return True
+    stored = _stored_timestamp(updated_at)
+    if stored is None:
+        return True
+    return mtime > stored + 0.001
+
+
+def _product_files_ready(slug: str) -> bool:
+    """Both files exist and meta.json is not older than the GeoJSON export."""
+    city_dir = config.CITIES_DIR / slug
+    geo = city_dir / "hexes.geojson"
+    meta = _meta_path(city_dir)
+    if not geo.is_file() or not meta.is_file():
+        return False
+    # Export writes GeoJSON first, then meta.json. A newer GeoJSON is a partial write.
+    return meta.stat().st_mtime + 0.001 >= geo.stat().st_mtime
+
+
+def _row_updated_at(slug: str) -> str | None:
     with _lock:
         conn = connect()
         try:
-            row = conn.execute(
-                "SELECT 1 FROM cities WHERE slug = ? LIMIT 1",
-                (slug,),
-            ).fetchone()
+            row = conn.execute("SELECT updated_at FROM cities WHERE slug = ?", (slug,)).fetchone()
         finally:
             conn.close()
-    return row is not None
+    return row["updated_at"] if row else None
 
 
-def _migrate_filesystem_cities() -> None:
-    """Import existing on-disk cities that are not yet in the DB."""
-    if not config.CITIES_DIR.exists():
-        return
-    for d in sorted(config.CITIES_DIR.iterdir()):
-        if not d.is_dir():
-            continue
-        geo = d / "hexes.geojson"
-        if not geo.exists():
-            continue
-        slug = d.name
-        if _slug_exists(slug):
-            continue
-        try:
-            upsert_city_from_dir(d)
-            log("db", f"migrated city {slug}")
-        except (OSError, json.JSONDecodeError) as exc:
-            log("db", f"skip migrate {slug}: {exc}")
+def _meta_from_geojson(geo: Path) -> dict[str, Any] | None:
+    """One-time read of a legacy export that never wrote meta.json."""
+    try:
+        data = json.loads(geo.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        log("db", f"skip meta backfill {geo.parent.name}: {exc}")
+        return None
+    meta = data.get("meta") if isinstance(data, dict) else None
+    if not isinstance(meta, dict):
+        return None
+    return meta
 
 
-def upsert_city(slug: str, name: str, meta: dict[str, Any], geojson_text: str) -> None:
+def load_city_meta(city_dir: Path) -> dict[str, Any] | None:
+    """Read meta.json, backfilling it once from hexes.geojson when absent."""
+    geo = city_dir / "hexes.geojson"
+    if not geo.is_file():
+        return None
+    meta_path = _meta_path(city_dir)
+    if not meta_path.exists():
+        meta = _meta_from_geojson(geo)
+        if meta is None:
+            return None
+        meta_path.write_text(json.dumps(meta, ensure_ascii=False), encoding="utf-8")
+    try:
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        log("db", f"skip index {city_dir.name}: {exc}")
+        return None
+    if not isinstance(meta, dict):
+        return None
+    # Directory name is the URL slug hex-svc scans. Keep the index on that key.
+    meta["slug"] = city_dir.name
+    if not meta.get("name"):
+        meta["name"] = city_dir.name
+    return meta
+
+
+def upsert_city(
+    slug: str,
+    name: str,
+    meta: dict[str, Any],
+    *,
+    updated_at: str | None = None,
+) -> None:
     init_db()
-    version = int(meta.get("pipeline_version") or config.PIPELINE_SCHEMA_VERSION)
-    now = datetime.now(UTC).isoformat()
+    version = int(meta.get("pipeline_version") or 0)
+    stamp = updated_at or datetime.now(UTC).isoformat()
     meta_json = json.dumps(meta, ensure_ascii=False)
     with _lock:
         conn = connect()
         try:
             conn.execute(
                 """
-                INSERT INTO cities (slug, name, meta_json, geojson, pipeline_version, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO cities (slug, name, meta_json, pipeline_version, updated_at)
+                VALUES (?, ?, ?, ?, ?)
                 ON CONFLICT(slug) DO UPDATE SET
                     name=excluded.name,
                     meta_json=excluded.meta_json,
-                    geojson=excluded.geojson,
                     pipeline_version=excluded.pipeline_version,
                     updated_at=excluded.updated_at
                 """,
-                (slug, name, meta_json, geojson_text, version, now),
+                (slug, name, meta_json, version, stamp),
             )
             conn.commit()
         finally:
@@ -124,31 +212,78 @@ def upsert_city(slug: str, name: str, meta: dict[str, Any], geojson_text: str) -
 
 
 def upsert_city_from_dir(city_dir: Path) -> dict[str, Any] | None:
-    """Load hexes.geojson + meta from disk and persist to DB."""
-    geo = city_dir / "hexes.geojson"
-    if not geo.exists():
+    """Index meta.json for a city directory. Does not read the GeoJSON body when meta exists."""
+    if not (city_dir / "hexes.geojson").is_file():
         return None
-    raw = geo.read_text(encoding="utf-8")
-    data = json.loads(raw)
-    meta = data.get("meta") or {}
-    meta_path = city_dir / "meta.json"
-    if meta_path.exists():
-        try:
-            meta = {**meta, **json.loads(meta_path.read_text(encoding="utf-8"))}
-        except (OSError, json.JSONDecodeError):
-            pass
-    slug = meta.get("slug") or city_dir.name
-    name = meta.get("name") or slug
-    upsert_city(slug, name, meta, raw)
+    meta = load_city_meta(city_dir)
+    if meta is None:
+        return None
+    slug = str(meta.get("slug") or city_dir.name)
+    name = str(meta.get("name") or slug)
+    mtime = _meta_mtime(city_dir)
+    stamp = datetime.fromtimestamp(mtime, tz=UTC).isoformat() if mtime is not None else None
+    created = _row_updated_at(slug) is None
+    upsert_city(slug, name, meta, updated_at=stamp)
+    if created:
+        log("db", f"indexed city {slug}")
     return meta
+
+
+def _ensure_slug(slug: str) -> None:
+    city_dir = config.CITIES_DIR / slug
+    if not (city_dir / "hexes.geojson").is_file():
+        return
+    if not _meta_is_newer(city_dir, _row_updated_at(slug)):
+        return
+    upsert_city_from_dir(city_dir)
+
+
+def _prune_absent(present: set[str]) -> None:
+    with _lock:
+        conn = connect()
+        try:
+            rows = conn.execute("SELECT slug FROM cities").fetchall()
+            stale = [(row["slug"],) for row in rows if row["slug"] not in present]
+            if not stale:
+                return
+            conn.executemany("DELETE FROM cities WHERE slug = ?", stale)
+            conn.commit()
+        finally:
+            conn.close()
+
+
+def refresh_index() -> None:
+    """Reload meta.json when it is newer than the index, and drop cities with no file."""
+    if not config.CITIES_DIR.is_dir():
+        return
+    present: set[str] = set()
+    for city_dir in sorted(config.CITIES_DIR.iterdir()):
+        if not city_dir.is_dir():
+            continue
+        if not (city_dir / "hexes.geojson").is_file():
+            continue
+        if not _meta_is_newer(city_dir, _row_updated_at(city_dir.name)):
+            present.add(city_dir.name)
+            continue
+        try:
+            indexed = upsert_city_from_dir(city_dir)
+        except (OSError, json.JSONDecodeError) as exc:
+            log("db", f"skip index {city_dir.name}: {exc}")
+            continue
+        if indexed is not None:
+            present.add(city_dir.name)
+    _prune_absent(present)
 
 
 def list_cities() -> list[dict[str, Any]]:
     init_db()
+    refresh_index()
     with _lock:
         conn = connect()
         try:
-            rows = conn.execute("SELECT meta_json FROM cities ORDER BY name COLLATE NOCASE").fetchall()
+            rows = conn.execute(
+                "SELECT meta_json FROM cities ORDER BY name COLLATE NOCASE"
+            ).fetchall()
         finally:
             conn.close()
     out: list[dict[str, Any]] = []
@@ -162,6 +297,7 @@ def list_cities() -> list[dict[str, Any]]:
 
 def get_city_meta(slug: str) -> dict[str, Any] | None:
     init_db()
+    _ensure_slug(slug)
     with _lock:
         conn = connect()
         try:
@@ -181,23 +317,10 @@ def get_city_meta(slug: str) -> dict[str, Any] | None:
     return meta
 
 
-def get_city_geojson_text(slug: str) -> str | None:
-    init_db()
-    with _lock:
-        conn = connect()
-        try:
-            row = conn.execute(
-                "SELECT geojson FROM cities WHERE slug = ?",
-                (slug,),
-            ).fetchone()
-        finally:
-            conn.close()
-    return row["geojson"] if row else None
-
-
 def is_db_city_current(slug: str) -> bool:
+    # Index first so a legacy export missing meta.json is backfilled before the check.
     meta = get_city_meta(slug)
-    if meta is None:
+    if meta is None or not _product_files_ready(slug):
         return False
     version = int(meta.get("pipeline_version") or 0)
     if version < int(config.PIPELINE_SCHEMA_VERSION):
