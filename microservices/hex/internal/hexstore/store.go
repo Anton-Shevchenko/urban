@@ -34,10 +34,12 @@ const (
 
 	geojsonName = "hexes.geojson"
 	metaName    = "meta.json"
+	scoresName  = "scores.json"
 )
 
 type Options struct {
 	DataDir        string
+	RentsDir       string
 	CacheSize      int
 	RescanInterval time.Duration
 }
@@ -280,6 +282,7 @@ func (s *Store) loadCity(slug string) (*city, error) {
 		}
 		hexes[h3] = factSheet(slug, name, h3, f.Properties)
 	}
+	s.mergeRents(slug, hexes)
 	slog.Info("loaded city",
 		"slug", slug,
 		"hexes", len(hexes),
@@ -287,6 +290,51 @@ func (s *Store) loadCity(slug string) (*city, error) {
 		"took", time.Since(started).String(),
 	)
 	return &city{name: name, hexes: hexes}, nil
+}
+
+// mergeRents fills rent fields from the rents service sidecar when that file
+// exists. A city whose rents service has not finished yet simply has no rent.
+func (s *Store) mergeRents(slug string, hexes map[string]*hexv1.Hex) {
+	if s.opts.RentsDir == "" {
+		return
+	}
+	raw, err := os.ReadFile(filepath.Join(s.opts.RentsDir, slug, scoresName))
+	if err != nil {
+		return
+	}
+	var doc struct {
+		Scores map[string]map[string]any `json:"scores"`
+	}
+	if json.Unmarshal(raw, &doc) != nil {
+		return
+	}
+	for h3, row := range doc.Scores {
+		hex, ok := hexes[h3]
+		if !ok {
+			continue
+		}
+		if v, ok := asFloat(row["rent_eur_m2"]); ok {
+			hex.RentEurM2 = &v
+		}
+		if v, ok := asFloat(row["asking_rent_eur_m2"]); ok {
+			hex.AskingRentEurM2 = &v
+		}
+		if v, ok := asFloat(row["sale_eur_m2"]); ok {
+			hex.SaleEurM2 = &v
+		}
+		if src := stringProp(row, "rent_source"); src != "" {
+			hex.RentSource = src
+		}
+		if asOf := stringProp(row, "rent_as_of"); asOf != "" {
+			hex.RentAsOf = asOf
+		}
+		if src := stringProp(row, "asking_rent_source"); src != "" {
+			hex.AskingRentSource = src
+		}
+		if src := stringProp(row, "sale_source"); src != "" {
+			hex.SaleSource = src
+		}
+	}
 }
 
 func cityName(slug, cityDir string, meta map[string]any) string {

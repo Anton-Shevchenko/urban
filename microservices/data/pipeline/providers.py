@@ -15,6 +15,7 @@ Usage::
 
 from __future__ import annotations
 
+import fcntl
 import random
 import threading
 import time
@@ -51,6 +52,10 @@ class Provider:
     attempts: int = 4
     timeout_s: float = 60.0
     backoff_s: float = 2.0
+    # When set, the gap is also enforced through a file lock so separate
+    # processes share one Overpass budget. Threading.Lock still covers threads
+    # inside this process; flock does not, because it is per-process.
+    shared_lock: bool = False
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
     _last_request: float = field(default=0.0, repr=False)
 
@@ -60,6 +65,21 @@ class Provider:
             headers.update(extra)
         return headers
 
+    def _lock_path(self):
+        return config.SHARED_DIR / "overpass.lock"
+
+    def _file_gap(self, fh) -> float:
+        fh.seek(0)
+        raw = fh.read().strip()
+        last = float(raw) if raw else 0.0
+        return max(0.0, self.min_interval_s - (time.time() - last))
+
+    def _file_stamp(self, fh) -> None:
+        fh.seek(0)
+        fh.truncate()
+        fh.write(f"{time.time():.6f}")
+        fh.flush()
+
     def _throttle(self) -> None:
         if self.min_interval_s <= 0:
             return
@@ -67,7 +87,19 @@ class Provider:
         # one request budget instead of each honouring the limit separately.
         with self._lock:
             wait = self.min_interval_s - (time.monotonic() - self._last_request)
-            if wait > 0:
+            if self.shared_lock:
+                path = self._lock_path()
+                path.parent.mkdir(parents=True, exist_ok=True)
+                with open(path, "a+") as fh:
+                    fcntl.flock(fh, fcntl.LOCK_EX)
+                    try:
+                        wait = max(wait, self._file_gap(fh))
+                        if wait > 0:
+                            time.sleep(wait)
+                        self._file_stamp(fh)
+                    finally:
+                        fcntl.flock(fh, fcntl.LOCK_UN)
+            elif wait > 0:
                 time.sleep(wait)
             self._last_request = time.monotonic()
 
@@ -158,6 +190,7 @@ OVERPASS = Provider(
     attempts=2,
     timeout_s=config.OVERPASS_TIMEOUT,
     backoff_s=3.0,
+    shared_lock=True,
 )
 
 # Municipal WFS / open-data endpoints: slow but not rate limited.

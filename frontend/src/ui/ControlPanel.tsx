@@ -21,6 +21,7 @@ export function ControlPanel({ onClose }: Props) {
     mapViewOptions,
     showHiddenGems,
     setShowHiddenGems,
+    viewStatus,
   } = useMapViewState();
 
   const hasVoi = Boolean(
@@ -38,7 +39,12 @@ export function ControlPanel({ onClose }: Props) {
     }),
   );
 
+  const mapViewLabel = mapViewOptions.find((o) => o.value === mapView)?.label || 'Infrastruktur';
+
   const legendNote = useMemo(() => {
+    if (viewStatus === 'pending') return `${mapViewLabel} wird berechnet …`;
+    if (viewStatus === 'error') return `${mapViewLabel} konnte nicht geladen werden.`;
+    if (viewStatus === 'missing') return `${mapViewLabel} ist für diese Stadt noch nicht berechnet.`;
     if (mapView === 'cycleways') {
       return 'Radwege · Grün: eigene Radwege · Blau: baulich getrennte Führung an der Fahrbahn · Orange: getrennte Geh- und Radwege · OpenStreetMap-Linien, keine Hex-Füllung';
     }
@@ -51,9 +57,8 @@ export function ControlPanel({ onClose }: Props) {
     return (
       'Infrastruktur · Läden, Cafés, Ärzte, Schulen u. a. · absolute 0–100 · 85–100 Excellent · 70–84 Good · 55–69 Average · 40–54 Below average · 0–39 Poor · grau = Insufficient data'
     );
-  }, [mapView]);
+  }, [mapView, mapViewLabel, viewStatus]);
 
-  const mapViewLabel = mapViewOptions.find((o) => o.value === mapView)?.label || 'Infrastruktur';
   const streetOverlay = mapView === 'cycleways';
   const rentFill = mapView === 'price';
 

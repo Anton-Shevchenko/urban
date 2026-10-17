@@ -1,16 +1,106 @@
+x-map-service: &map-service
+  build:
+    context: ./microservices/data
+  environment: &map-env
+    SHARED_DIR: /shared
+    DATA_DIR: /app/data
+    SERVICE_DATA_ROOT: /app/data
+    GENERATE_MAX_WORKERS: "1"
+  restart: unless-stopped
+
 services:
+  infrastructure:
+    <<: *map-service
+    command: ["python", "-m", "services.infrastructure"]
+    environment:
+      <<: *map-env
+      PORT: "8001"
+    volumes:
+      - ./microservices/data/data/shared:/shared
+      - ./microservices/data/data/services/infrastructure:/app/data
+    expose:
+      - "8001"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health')"]
+      interval: 10s
+      timeout: 3s
+      retries: 8
+
+  cycleways:
+    <<: *map-service
+    command: ["python", "-m", "services.cycleways"]
+    environment:
+      <<: *map-env
+      PORT: "8002"
+    volumes:
+      - ./microservices/data/data/shared:/shared
+      - ./microservices/data/data/services/cycleways:/app/data
+    expose:
+      - "8002"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8002/health')"]
+      interval: 10s
+      timeout: 3s
+      retries: 8
+
+  walkability:
+    <<: *map-service
+    command: ["python", "-m", "services.walkability"]
+    environment:
+      <<: *map-env
+      PORT: "8003"
+    volumes:
+      - ./microservices/data/data/shared:/shared
+      - ./microservices/data/data/services/walkability:/app/data
+    expose:
+      - "8003"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8003/health')"]
+      interval: 10s
+      timeout: 3s
+      retries: 8
+
+  rents:
+    <<: *map-service
+    command: ["python", "-m", "services.rents"]
+    environment:
+      <<: *map-env
+      PORT: "8004"
+    volumes:
+      - ./microservices/data/data/shared:/shared
+      - ./microservices/data/data/services/rents:/app/data
+    expose:
+      - "8004"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8004/health')"]
+      interval: 10s
+      timeout: 3s
+      retries: 8
+
   api:
-    build:
-      context: ./microservices/data
+    <<: *map-service
+    command: ["python", "-m", "server"]
     ports:
       - "8000:8000"
     volumes:
-      - ./microservices/data/data:/app/data
+      - ./microservices/data/data/shared:/shared
     environment:
+      SHARED_DIR: /shared
+      DATA_DIR: /tmp/router
       CORS_ORIGINS: "http://localhost:8080,http://127.0.0.1:8080,http://localhost:5173"
-      # City generation is Overpass-bound; more workers means more parallel
-      # conversations with the same public mirrors, not more throughput.
-      GENERATE_MAX_WORKERS: "2"
+      INFRASTRUCTURE_URL: http://infrastructure:8001
+      CYCLEWAYS_URL: http://cycleways:8002
+      WALKABILITY_URL: http://walkability:8003
+      RENTS_URL: http://rents:8004
+    depends_on:
+      infrastructure:
+        condition: service_healthy
+      cycleways:
+        condition: service_healthy
+      walkability:
+        condition: service_healthy
+      rents:
+        condition: service_healthy
     restart: unless-stopped
 
   # The three Go services build from the repository root because they share the
@@ -21,13 +111,18 @@ services:
       dockerfile: microservices/hex/Dockerfile
     environment:
       HEX_GRPC_ADDR: ":50051"
-      HEX_DATA_DIR: /data/cities
+      HEX_DATA_DIR: /infra
+      HEX_RENTS_DIR: /rents
       # Cities are parsed on first request and evicted LRU, so memory does not
       # grow with the number of generated cities.
       HEX_CACHE_CITIES: "4"
       HEX_RESCAN_INTERVAL: "30s"
     volumes:
-      - ./microservices/data/data/cities:/data/cities:ro
+      - ./microservices/data/data/services/infrastructure:/infra:ro
+      - ./microservices/data/data/services/rents:/rents:ro
+    depends_on:
+      infrastructure:
+        condition: service_healthy
     expose:
       - "50051"
     healthcheck:

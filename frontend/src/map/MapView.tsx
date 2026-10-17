@@ -185,7 +185,7 @@ export function MapView({ mapStyleUrl }: Props) {
     const firstId =
       (city.features[0]?.properties as Record<string, unknown> | undefined)?.h3 ??
       (city.features[0]?.id ?? '');
-    const key = `${city.citySlug}:${city.features.length}:${String(firstId)}`;
+    const key = `${city.citySlug}:${city.features.length}:${String(firstId)}:${paint.paintVersion}`;
     if (key !== cityKeyRef.current || !liveFcRef.current) {
       cityKeyRef.current = key;
       liveFcRef.current = {
@@ -197,7 +197,7 @@ export function MapView({ mapStyleUrl }: Props) {
         })),
       };
     }
-  }, [city.citySlug, city.features]);
+  }, [city.citySlug, city.features, paint.paintVersion]);
 
   useHexPaint({
     mapRef,

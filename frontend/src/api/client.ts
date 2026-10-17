@@ -311,6 +311,55 @@ async function fetchGeojson(url: string, opts?: RequestOptions): Promise<GeoJSON
   }
 }
 
+export type ViewScoreTable = Record<string, Record<string, number | string | null>>;
+
+export async function fetchViewStatus(
+  slug: string,
+  view: string,
+  opts?: RequestOptions,
+): Promise<CityStatus> {
+  const resp = await timedFetch(
+    apiUrl(`/api/city/${encodeURIComponent(slug)}/views/${encodeURIComponent(view)}/status`),
+    { cache: 'no-store' },
+    opts,
+    TIMEOUT_JSON_MS,
+  );
+  const payload = await resp.json().catch(() => ({}));
+  if (resp.status === 404) return { status: 'missing', slug };
+  if (!resp.ok) throw new Error(parseApiError(payload, resp.status));
+  return payload as CityStatus;
+}
+
+export async function fetchViewScores(
+  slug: string,
+  view: string,
+  opts?: RequestOptions,
+): Promise<ViewScoreTable> {
+  const resp = await timedFetch(
+    apiUrl(`/api/city/${encodeURIComponent(slug)}/views/${encodeURIComponent(view)}/scores`),
+    { cache: 'no-store' },
+    opts,
+    TIMEOUT_JSON_MS,
+  );
+  if (!resp.ok) return {};
+  const data = await resp.json();
+  return (data.scores || {}) as ViewScoreTable;
+}
+
+export function joinViewScores(
+  features: GeoJSON.Feature[],
+  scores: ViewScoreTable,
+): GeoJSON.Feature[] {
+  if (!scores || Object.keys(scores).length === 0) return features;
+  return features.map((feature) => {
+    const props = (feature.properties || {}) as Record<string, unknown>;
+    const h3 = String(props.h3 || props.h3_index || '');
+    const row = h3 ? scores[h3] : undefined;
+    if (!row) return feature;
+    return { ...feature, properties: { ...props, ...row } };
+  });
+}
+
 export async function fetchCyclewaysGeojson(
   slug: string,
   opts?: RequestOptions,

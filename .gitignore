@@ -10,10 +10,13 @@ __pycache__/
 # frontend/public/data/hexes.geojson so the map works without a pipeline run.
 microservices/data/data/cache/
 microservices/data/data/cities/
+microservices/data/data/services/
+microservices/data/data/shared/
 microservices/data/data/gtfs/
 microservices/data/data/zensus/
 microservices/data/data/market/
 microservices/data/data/avm/
+microservices/data/data/overpass.lock
 microservices/data/data/wohnindex.db
 microservices/data/data/*.db-journal
 microservices/data/data/*.db-wal

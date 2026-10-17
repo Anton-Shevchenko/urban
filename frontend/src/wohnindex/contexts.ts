@@ -64,6 +64,7 @@ export type MapViewSlice = {
   mapViewOptions: { value: string; label: string }[];
   showHiddenGems: boolean;
   setShowHiddenGems: (on: boolean) => void;
+  viewStatus: string;
 };
 
 export type ChatSlice = {

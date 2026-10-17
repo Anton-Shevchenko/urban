@@ -1,9 +1,8 @@
-"""HTTP surface of the data API — no Overpass, no full pipeline."""
+"""Public router: geocode once, then fan out to the four map-view services."""
 
 from __future__ import annotations
 
 import importlib
-import json
 
 import pytest
 from fastapi.testclient import TestClient
@@ -11,268 +10,169 @@ from fastapi.testclient import TestClient
 from pipeline.city import CityContext
 
 
-def _ctx(slug: str, name: str, base_dir) -> CityContext:
+def _ctx() -> CityContext:
     return CityContext(
-        slug=slug,
-        name=name,
+        slug="hamburg",
+        name="Hamburg",
         center=(53.55, 9.99),
         bbox=(53.4, 9.7, 53.7, 10.3),
-        base_dir=base_dir,
     )
 
 
+class _Upstream:
+    def __init__(self, status: int = 200, body: bytes = b"{}", content_type: str = "application/json") -> None:
+        self.status_code = status
+        self.content = body
+        self.headers = {"content-type": content_type}
+        self.text = body.decode()
+        self.reason = "error" if status >= 400 else "OK"
+
+    def json(self) -> dict:
+        import json
+
+        return json.loads(self.content)
+
+
 @pytest.fixture
-def api(tmp_path, monkeypatch):
-    from pipeline import config
-
-    cities = tmp_path / "cities"
-    cities.mkdir()
-    monkeypatch.setattr(config, "DATA_DIR", tmp_path)
-    monkeypatch.setattr(config, "CITIES_DIR", cities)
-
-    from server import db as db_module
-
-    db = importlib.reload(db_module)
-    monkeypatch.setattr(db, "_DB_PATH", tmp_path / "test.db")
-    db._initialized = False
-
-    from server import jobs as jobs_module
-
-    jobs = importlib.reload(jobs_module)
-    jobs._initialized = False
-    jobs._futures.clear()
-
+def api():
     from server import app as app_module
 
     app_mod = importlib.reload(app_module)
-
     with TestClient(app_mod.app) as client:
-        yield client, app_mod, cities, db
+        yield client, app_mod
 
 
 def test_health(api):
-    client, _, _, _ = api
+    client, app_mod = api
+
+    def down(*_args, **_kwargs):
+        from fastapi import HTTPException
+
+        raise HTTPException(status_code=502, detail="down")
+
+    app_mod.request_upstream = down
     resp = client.get("/api/health")
     assert resp.status_code == 200
     body = resp.json()
     assert body["ok"] is True
     assert body["jobs_running"] == 0
-
-
-def test_list_cities_empty(api):
-    client, _, _, _ = api
-    assert client.get("/api/cities").json() == {"cities": []}
-
-
-def test_missing_geojson_is_404(api):
-    client, _, _, _ = api
-    assert client.get("/api/city/nowhere.geojson").status_code == 404
-    assert client.get("/api/city/nowhere/stats").status_code == 404
-    assert client.get("/api/city/nowhere/hexes.parquet").status_code == 404
-    assert client.get("/api/city/nowhere/cycleways.geojson").status_code == 404
-
-
-def test_unknown_status_is_404(api):
-    client, _, _, _ = api
-    assert client.get("/api/status/nowhere").status_code == 404
+    assert body["services"]["infrastructure"] is False
 
 
 def test_generate_rejects_empty_query(api, monkeypatch):
-    client, app_mod, _, _ = api
+    client, app_mod = api
 
     def boom(_query: str):
         raise ValueError("empty city query")
 
     monkeypatch.setattr(app_mod, "resolve_city", boom)
+    monkeypatch.setattr(app_mod, "find_cached_city", lambda _q: None)
     resp = client.post("/api/generate", json={"q": "  "})
     assert resp.status_code == 400
 
 
 def test_generate_unknown_city_is_404(api, monkeypatch):
-    client, app_mod, _, _ = api
+    client, app_mod = api
 
     def boom(_query: str):
         raise LookupError("no result for 'Atlantis'")
 
     monkeypatch.setattr(app_mod, "resolve_city", boom)
+    monkeypatch.setattr(app_mod, "find_cached_city", lambda _q: None)
     resp = client.post("/api/generate", json={"q": "Atlantis"})
     assert resp.status_code == 404
     assert "Atlantis" in resp.json()["detail"]
 
 
 def test_generate_geocoder_failure_is_502(api, monkeypatch):
-    client, app_mod, _, _ = api
+    client, app_mod = api
 
     def boom(_query: str):
         raise RuntimeError("nominatim timeout")
 
     monkeypatch.setattr(app_mod, "resolve_city", boom)
+    monkeypatch.setattr(app_mod, "find_cached_city", lambda _q: None)
     resp = client.post("/api/generate", json={"q": "Hamburg"})
     assert resp.status_code == 502
 
 
-def test_generate_regenerates_price_map_product(api, monkeypatch):
-    client, app_mod, cities, db = api
-    ctx = _ctx("rosenheim", "Rosenheim", cities / "rosenheim")
-    monkeypatch.setattr(app_mod, "resolve_city", lambda _q: ctx)
-    submitted = []
-    monkeypatch.setattr(app_mod, "_submit_generate", lambda c: submitted.append(c.slug))
+def test_generate_fans_out_and_returns_infrastructure(api, monkeypatch):
+    client, app_mod = api
+    ctx = _ctx()
+    monkeypatch.setattr(app_mod, "open_city", lambda _q: ctx)
+    seen: list[str] = []
 
-    db.upsert_city(
-        "rosenheim",
-        "Rosenheim",
-        {
-            "slug": "rosenheim",
-            "name": "Rosenheim",
-            "pipeline_version": 10_000,
-            "noise_db_spread": 5.0,
-            "product": "price-map",
-        },
-        json.dumps({"type": "FeatureCollection", "features": []}),
-    )
+    def fanout(city):
+        seen.append(city.slug)
+        return {"status": "pending", "slug": city.slug, "name": city.name}
 
-    resp = client.post("/api/generate", json={"q": "Rosenheim"})
-    assert resp.status_code == 200
-    body = resp.json()
-    assert body["status"] == "pending"
-    assert body["slug"] == "rosenheim"
-    assert submitted == ["rosenheim"]
-
-
-def test_status_does_not_treat_price_map_as_ready(api):
-    client, app_mod, _, db = api
-    db.upsert_city(
-        "rosenheim",
-        "Rosenheim",
-        {
-            "slug": "rosenheim",
-            "name": "Rosenheim",
-            "pipeline_version": 10_000,
-            "noise_db_spread": 5.0,
-            "product": "price-map",
-        },
-        json.dumps({"type": "FeatureCollection", "features": []}),
-    )
-    app_mod.jobs.mark_ready("rosenheim", 17, {"slug": "rosenheim", "name": "Rosenheim"})
-
-    resp = client.get("/api/status/rosenheim")
-    assert resp.status_code == 404
-
-
-def test_generate_returns_ready_when_db_is_current(api, monkeypatch):
-    client, app_mod, cities, db = api
-    ctx = _ctx("hamburg", "Hamburg", cities / "hamburg")
-    monkeypatch.setattr(app_mod, "resolve_city", lambda _q: ctx)
-
-    db.upsert_city(
-        "hamburg",
-        "Hamburg",
-        {
-            "slug": "hamburg",
-            "name": "Hamburg",
-            "pipeline_version": 10_000,
-            "noise_db_spread": 5.0,
-        },
-        json.dumps({"type": "FeatureCollection", "features": []}),
-    )
-
-    resp = client.post("/api/generate", json={"q": "Hamburg"})
-    assert resp.status_code == 200
-    body = resp.json()
-    assert body["status"] == "ready"
-    assert body["slug"] == "hamburg"
-
-
-def test_generate_queues_when_city_is_missing(api, monkeypatch):
-    client, app_mod, cities, _ = api
-    ctx = _ctx("hamburg", "Hamburg", cities / "hamburg")
-    monkeypatch.setattr(app_mod, "resolve_city", lambda _q: ctx)
-    monkeypatch.setattr(app_mod, "_submit_generate", lambda _ctx: None)
-
+    monkeypatch.setattr(app_mod, "fanout", fanout)
     resp = client.post("/api/generate", json={"q": "Hamburg"})
     assert resp.status_code == 200
     assert resp.json() == {"status": "pending", "slug": "hamburg", "name": "Hamburg"}
+    assert seen == ["hamburg"]
+
+
+def test_geojson_proxies_infrastructure(api, monkeypatch):
+    client, app_mod = api
+    calls: list[tuple[str, str]] = []
+
+    def upstream(method, service, path, payload=None, timeout=60):
+        calls.append((service, path))
+        return _Upstream(body=b'{"type":"FeatureCollection","features":[]}', content_type="application/geo+json")
+
+    monkeypatch.setattr(app_mod, "request_upstream", upstream)
+    resp = client.get("/api/city/hamburg.geojson")
+    assert resp.status_code == 200
+    assert resp.json()["type"] == "FeatureCollection"
+    assert calls == [("infrastructure", "/city/hamburg.geojson")]
+
+
+def test_missing_geojson_is_404(api, monkeypatch):
+    client, app_mod = api
+    monkeypatch.setattr(app_mod, "request_upstream", lambda *a, **k: _Upstream(status=404, body=b"missing"))
+    assert client.get("/api/city/nowhere.geojson").status_code == 404
+    assert client.get("/api/city/nowhere/cycleways.geojson").status_code == 404
+    assert client.get("/api/status/nowhere").status_code == 404
+
+
+def test_cycleways_proxy_reads_lines(api, monkeypatch):
+    client, app_mod = api
+    calls: list[tuple[str, str]] = []
+
+    def upstream(method, service, path, payload=None, timeout=60):
+        calls.append((service, path))
+        return _Upstream(
+            body=b'{"type":"FeatureCollection","features":[{"type":"Feature","properties":{"kind":"cycleway"},"geometry":null}]}'
+        )
+
+    monkeypatch.setattr(app_mod, "request_upstream", upstream)
+    resp = client.get("/api/city/muenchen/cycleways.geojson")
+    assert resp.status_code == 200
+    assert resp.json()["features"][0]["properties"]["kind"] == "cycleway"
+    assert calls == [("cycleways", "/city/muenchen/lines.geojson")]
+
+
+def test_view_scores_proxy(api, monkeypatch):
+    client, app_mod = api
+    calls: list[str] = []
+
+    def upstream(method, service, path, payload=None, timeout=60):
+        calls.append(f"{service} {path}")
+        return _Upstream(body=b'{"scores":{"abc":{"s_walkability":81}}}')
+
+    monkeypatch.setattr(app_mod, "request_upstream", upstream)
+    resp = client.get("/api/city/hamburg/views/walkability/scores")
+    assert resp.status_code == 200
+    assert resp.json()["scores"]["abc"]["s_walkability"] == 81
+    assert calls == ["walkability /city/hamburg/scores"]
+    assert client.get("/api/city/hamburg/views/nope/scores").status_code == 404
 
 
 def test_destinations_unknown_city_is_404(api):
-    client, _, _, _ = api
+    client, _ = api
     resp = client.post(
         "/api/destinations/matrix",
         json={"slug": "nowhere", "destinations": [{"lat": 53.5, "lng": 10.0}]},
     )
     assert resp.status_code == 404
-
-
-def test_city_geojson_from_db(api):
-    client, _, _, db = api
-    payload = {"type": "FeatureCollection", "features": []}
-    db.upsert_city(
-        "koeln",
-        "Köln",
-        {"slug": "koeln", "name": "Köln", "pipeline_version": 10_000, "noise_db_spread": 4.0},
-        json.dumps(payload),
-    )
-    resp = client.get("/api/city/koeln.geojson")
-    assert resp.status_code == 200
-    assert resp.json() == payload
-
-
-def test_city_geojson_prefers_newer_disk_over_stale_db(api):
-    import os
-    import time
-
-    client, _, cities, db = api
-    city = cities / "muenchen"
-    city.mkdir()
-    stale = {
-        "type": "FeatureCollection",
-        "features": [
-            {
-                "type": "Feature",
-                "geometry": {"type": "Polygon", "coordinates": []},
-                "properties": {"h3": "a", "s_living": 1},
-            }
-        ],
-    }
-    fresh = {
-        "type": "FeatureCollection",
-        "meta": {"slug": "muenchen", "name": "München", "pipeline_version": 10_000},
-        "features": [
-            {
-                "type": "Feature",
-                "geometry": {"type": "Polygon", "coordinates": []},
-                "properties": {"h3": "a", "s_living": 1, "s_walkability": 77.5},
-            }
-        ],
-    }
-    db.upsert_city(
-        "muenchen",
-        "München",
-        {"slug": "muenchen", "name": "München", "pipeline_version": 10_000, "noise_db_spread": 4.0},
-        json.dumps(stale),
-    )
-    geo = city / "hexes.geojson"
-    geo.write_text(json.dumps(fresh), encoding="utf-8")
-    (city / "meta.json").write_text(
-        json.dumps({"slug": "muenchen", "name": "München", "pipeline_version": 10_000}),
-        encoding="utf-8",
-    )
-    # Guarantee the file mtime is after the SQLite updated_at row.
-    later = time.time() + 5
-    os.utime(geo, (later, later))
-
-    resp = client.get("/api/city/muenchen.geojson")
-    assert resp.status_code == 200
-    body = resp.json()
-    assert body["features"][0]["properties"]["s_walkability"] == 77.5
-
-
-def test_city_cycleways_from_disk(api):
-    client, _, cities, _ = api
-    city = cities / "muenchen"
-    city.mkdir()
-    overlay = {"type": "FeatureCollection", "features": [{"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[11.5, 48.1], [11.51, 48.11]]}, "properties": {"kind": "cycleway"}}]}
-    (city / "cycleways.geojson").write_text(json.dumps(overlay), encoding="utf-8")
-    resp = client.get("/api/city/muenchen/cycleways.geojson")
-    assert resp.status_code == 200
-    assert resp.json()["features"][0]["properties"]["kind"] == "cycleway"

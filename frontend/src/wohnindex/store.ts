@@ -22,7 +22,15 @@ import {
 import type { ScoringContext, ScoringEngine, ScoringMode } from '../scoring/types';
 import { CFG, PRESET_USES_PREFS, STORAGE } from '../scoring/constants';
 import { summarizeScores, type ScoreDistribution } from '../scoring/histogram';
-import { ensureApiBase, fetchCityGeojson, fetchDestMatrix, isAbortError } from '../api/client';
+import {
+  ensureApiBase,
+  fetchCityGeojson,
+  fetchDestMatrix,
+  fetchViewScores,
+  fetchViewStatus,
+  isAbortError,
+  joinViewScores,
+} from '../api/client';
 import { loadOrGenerateCity } from '../api/city';
 import {
   buildMapViewOptions,
@@ -97,6 +105,7 @@ export function useWohnIndexStore(options: UseWohnIndexOptions = {}) {
   );
   const [chatHex, setChatHex] = useState<ChatHex | null>(null);
   const [chatOpen, setChatOpen] = useState(false);
+  const [viewStatus, setViewStatus] = useState('');
   const [mapView, setMapViewState] = useState(() => {
     try {
       const v = localStorage.getItem(STORAGE.mapView);
@@ -324,6 +333,56 @@ export function useWohnIndexStore(options: UseWohnIndexOptions = {}) {
     },
     [scheduleScoringCommit],
   );
+
+  useEffect(() => {
+    if (!citySlug) return;
+    if (mapView !== 'price' && mapView !== 'cycleways' && mapView !== 'walkability') {
+      setViewStatus('');
+      return;
+    }
+    let cancelled = false;
+    const view = mapView;
+    const slug = citySlug;
+    setViewStatus('pending');
+    const deadline = Date.now() + 45 * 60_000;
+
+    const wait = (ms: number) => new Promise((resolve) => {
+      window.setTimeout(resolve, ms);
+    });
+
+    (async () => {
+      while (!cancelled && Date.now() < deadline) {
+        try {
+          const status = await fetchViewStatus(slug, view);
+          if (cancelled) return;
+          if (status.status === 'missing') {
+            setViewStatus('missing');
+            return;
+          }
+          if (status.status === 'error') {
+            setViewStatus('error');
+            return;
+          }
+          if (status.status === 'ready') {
+            const scores = await fetchViewScores(slug, view);
+            if (cancelled) return;
+            setFeatures((prev) => joinViewScores(prev, scores));
+            setPaintVersion((version) => version + 1);
+            setViewStatus('ready');
+            return;
+          }
+        } catch {
+          if (cancelled) return;
+        }
+        await wait(2_000);
+      }
+      if (!cancelled) setViewStatus('error');
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [citySlug, mapView, features.length]);
 
   const setShowHiddenGems = useCallback((on: boolean) => {
     setShowHiddenGemsState(on);
@@ -929,6 +988,7 @@ export function useWohnIndexStore(options: UseWohnIndexOptions = {}) {
     setMapView,
     showHiddenGems,
     setShowHiddenGems,
+    viewStatus,
     activeProfile,
     scoringMode,
     setScoringMode,

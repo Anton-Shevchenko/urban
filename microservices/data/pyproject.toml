@@ -38,7 +38,7 @@ urban-data-api = "server.__main__:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["pipeline*", "server*"]
+include = ["pipeline*", "server*", "services*"]
 exclude = ["tests*", "scripts*", "data*"]
 
 [tool.pytest.ini_options]

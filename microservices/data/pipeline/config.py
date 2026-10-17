@@ -43,6 +43,9 @@ def _detect_root() -> Path:
 _SERVICE_DIR = _service_dir()
 ROOT = _detect_root()
 DATA_DIR = Path(os.environ.get("DATA_DIR", _SERVICE_DIR / "data"))
+# Grid + Overpass lock. Defaults to DATA_DIR so a single-process run keeps
+# one tree; Docker mounts a volume here that every map-view service shares.
+SHARED_DIR = Path(os.environ.get("SHARED_DIR", DATA_DIR))
 FRONTEND_PUBLIC_DIR = Path(os.environ.get("FRONTEND_PUBLIC_DIR", ROOT / "frontend" / "public"))
 CACHE_DIR = DATA_DIR / "cache"  # legacy single-city cache (kept for compat)
 CITIES_DIR = DATA_DIR / "cities"  # per-city generated data root

@@ -80,21 +80,13 @@ def test_cycleways_overlay_is_exported(exported):
     assert max(scores) - min(scores) > 5
 
 
-def test_walkability_overlay_is_exported(exported):
-    props = [f["properties"] for f in exported["data"]["features"]]
-    scores = [p.get("s_walkability") for p in props]
-    assert all(v is not None and 0 <= v <= 100 for v in scores)
-    assert max(scores) - min(scores) > 5
-    for key in ("wb_connectivity", "wb_transit", "wb_diversity", "wb_density", "wb_green"):
-        assert all(p.get(key) is not None for p in props)
+def test_walkability_is_not_baked_into_the_monolith_export(exported):
+    props = exported["data"]["features"][0]["properties"]
+    assert "s_walkability" not in props
 
 
-def test_cycleway_lines_sidecar_is_exported(exported):
+def test_cycleway_lines_sidecar_is_not_written_by_the_monolith(exported):
     from pipeline import config
 
     path = exported["ctx"].base_dir / config.CYCLEWAYS_GEOJSON_FILE
-    assert path.is_file()
-    overlay = json.loads(path.read_text(encoding="utf-8"))
-    assert overlay["type"] == "FeatureCollection"
-    assert len(overlay["features"]) >= 1
-    assert overlay["features"][0]["geometry"]["type"] in ("LineString", "MultiLineString")
+    assert not path.exists()

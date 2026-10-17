@@ -32,7 +32,6 @@ from pipeline.export.score_scales import (
     rent_value_score,
     traffic_safety_score,
     traffic_safety_strict,
-    walkability_index,
 )
 from pipeline.factors.center import center_anchors
 from pipeline.generated import contract as generated
@@ -375,9 +374,6 @@ def build(ctx: CityContext) -> gpd.GeoDataFrame:
     if "s_cycleways" in df.columns:
         df["s_cycleways"] = df["s_cycleways"].clip(0, 100).round(1)
 
-    wb = walkability_index(df)
-    df[wb.columns] = wb
-
     if "rent_eur_m2" in df.columns:
         df["s_rent_relative_city"] = rent_percentile_score(df["rent_eur_m2"])
         df["s_rent_kalt_benchmark"] = rent_kalt_lenient(df["rent_eur_m2"])
@@ -674,9 +670,6 @@ def export(ctx: CityContext, df: gpd.GeoDataFrame) -> None:
     with open(ctx.meta_json, "w", encoding="utf-8") as fh:
         json.dump(meta, fh)
     _write_sidecars(ctx, df, len(features))
-    from pipeline.factors import cycleways as cycleways_overlay
-
-    cycleways_overlay.write_overlay_geojson(ctx)
     size_kb = out_path.stat().st_size / 1024
     log(STEP, f"exported {len(features)} features -> {out_path} ({size_kb:.0f} KB)")
 

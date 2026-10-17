@@ -44,7 +44,9 @@ stop стоп:
 
 clear-cache скинути-кеш:
 	rm -rf microservices/data/data/cache/*
-	rm -rf microservices/data/data/cities/*/cache
+	rm -rf microservices/data/data/cities/*/cache \
+		microservices/data/data/services \
+		microservices/data/data/shared
 	rm -f microservices/data/data/cities/*/hexes.geojson \
 		microservices/data/data/cities/*/cycleways.geojson
 	rm -f microservices/data/data/wohnindex.db \

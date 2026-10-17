@@ -19,6 +19,7 @@ WORKDIR /app
 COPY pyproject.toml README.md ./
 COPY pipeline/ pipeline/
 COPY server/ server/
+COPY services/ services/
 RUN pip install .
 
 FROM python:3.12-slim

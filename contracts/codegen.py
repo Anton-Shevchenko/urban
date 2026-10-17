@@ -160,7 +160,14 @@ def canonical_daily_life(scoring: dict[str, Any]) -> dict[str, Any]:
 
 
 def pipeline_steps(metrics: dict[str, Any]) -> list[dict[str, Any]]:
-    return [strip_comments(s) for s in metrics.get("steps", [])]
+    """Monolith steps. Map-view services own the steps tagged ``map_service``."""
+    steps: list[dict[str, Any]] = []
+    for step in metrics.get("steps", []):
+        clean = strip_comments(step)
+        if clean.get("map_service"):
+            continue
+        steps.append(clean)
+    return steps
 
 
 def pipeline_waves(metrics: dict[str, Any]) -> list[list[str]]:

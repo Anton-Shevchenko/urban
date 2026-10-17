@@ -88,6 +88,7 @@ export function WohnIndexProvider({
     mapViewOptions: store.mapViewOptions,
     showHiddenGems: store.showHiddenGems,
     setShowHiddenGems: store.setShowHiddenGems,
+    viewStatus: store.viewStatus,
   }), [
     store.mapView,
     store.paintMapView,
@@ -95,6 +96,7 @@ export function WohnIndexProvider({
     store.mapViewOptions,
     store.showHiddenGems,
     store.setShowHiddenGems,
+    store.viewStatus,
   ]);
 
   const chat = useMemo<ChatSlice>(() => ({

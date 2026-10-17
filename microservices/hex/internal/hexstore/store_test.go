@@ -202,3 +202,40 @@ func writeFixtureCity(t *testing.T, root, slug string) {
 		t.Fatal(err)
 	}
 }
+
+func TestRentsSidecarFillsFactSheet(t *testing.T) {
+	root := t.TempDir()
+	writeFixtureCity(t, root, "rosenheim")
+	rents := filepath.Join(t.TempDir(), "rosenheim")
+	if err := os.MkdirAll(rents, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	sidecar := map[string]any{
+		"scores": map[string]any{
+			"hex-rosenheim": map[string]any{
+				"rent_eur_m2": 11.5,
+				"rent_source": "Zensus 2022",
+				"rent_as_of":  "2026-08",
+			},
+		},
+	}
+	raw, err := json.Marshal(sidecar)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(rents, scoresName), raw, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	s := newTestStore(t, Options{DataDir: root, RentsDir: filepath.Dir(rents)})
+	hex, err := s.Get(context.Background(), "rosenheim", "hex-rosenheim")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hex.GetRentEurM2() != 11.5 {
+		t.Fatalf("rent = %v, want 11.5", hex.GetRentEurM2())
+	}
+	if hex.GetRentSource() != "Zensus 2022" {
+		t.Fatalf("rent source = %q", hex.GetRentSource())
+	}
+}

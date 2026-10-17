@@ -41,11 +41,13 @@ func main() {
 
 	addr := env.String("HEX_GRPC_ADDR", ":50051")
 	dataDir := env.String("HEX_DATA_DIR", "/data/cities")
+	rentsDir := env.String("HEX_RENTS_DIR", "")
 	cacheSize := env.Int("HEX_CACHE_CITIES", hexstore.DefaultCacheSize)
 	rescan := env.Duration("HEX_RESCAN_INTERVAL", hexstore.DefaultRescanInterval)
 
 	store, err := hexstore.New(hexstore.Options{
 		DataDir:        dataDir,
+		RentsDir:       rentsDir,
 		CacheSize:      cacheSize,
 		RescanInterval: rescan,
 	})
