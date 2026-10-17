@@ -173,8 +173,38 @@ def _hex_data_quality(row: pd.Series) -> str:
     return "estimated"
 
 
+def _clip_grid_to_admin_boundary(ctx: CityContext, grid: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+    """Drop hexes whose centre sits outside the cached admin polygon.
+
+    Older cities were sometimes filled from the Nominatim bounding box, which
+    paints neighbouring Gemeinden. Clipping here keeps a quick re-export honest
+    even before the grid parquet is rebuilt.
+    """
+    boundary_path = ctx.cache(config.BOUNDARY_FILE)
+    if not boundary_path.exists() or len(grid) == 0:
+        return grid
+    if "lat" not in grid.columns or "lng" not in grid.columns:
+        return grid
+    try:
+        from shapely import points
+        from shapely.geometry import shape
+        from shapely.predicates import covers
+
+        boundary = shape(json.loads(boundary_path.read_text(encoding="utf-8")))
+        pts = points(grid["lng"].to_numpy(dtype=float), grid["lat"].to_numpy(dtype=float))
+        mask = covers(boundary, pts)
+    except Exception as exc:  # noqa: BLE001
+        log(STEP, f"admin-boundary clip skipped: {exc}")
+        return grid
+    kept = int(mask.sum())
+    if kept == len(grid):
+        return grid
+    log(STEP, f"clipped grid to admin boundary: {len(grid)} → {kept}")
+    return grid.loc[mask].reset_index(drop=True)
+
+
 def build(ctx: CityContext) -> gpd.GeoDataFrame:
-    grid = gpd.read_parquet(ctx.cache(config.GRID_FILE))
+    grid = _clip_grid_to_admin_boundary(ctx, gpd.read_parquet(ctx.cache(config.GRID_FILE)))
     business = pd.read_parquet(ctx.cache(config.BUSINESS_FILE))
     green = pd.read_parquet(ctx.cache(config.GREEN_FILE))
     noise = pd.read_parquet(ctx.cache(config.NOISE_FILE))

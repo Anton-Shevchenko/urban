@@ -116,6 +116,33 @@ def _geojson_reason(data: dict) -> str | None:
     return None
 
 
+def _grid_outside_boundary(cache: Path) -> str | None:
+    """Detect bbox-filled grids that spill into neighbouring municipalities."""
+    boundary_path = cache / config.BOUNDARY_FILE
+    grid_path = cache / config.GRID_FILE
+    if not boundary_path.exists() or not grid_path.exists():
+        return None
+    try:
+        import pandas as pd
+        from shapely import points
+        from shapely.geometry import shape
+        from shapely.predicates import covers
+
+        boundary = shape(json.loads(boundary_path.read_text(encoding="utf-8")))
+        grid = pd.read_parquet(grid_path, columns=["lat", "lng"])
+    except Exception:  # noqa: BLE001
+        return None
+    if len(grid) == 0:
+        return "empty grid"
+    pts = points(grid["lng"].to_numpy(dtype=float), grid["lat"].to_numpy(dtype=float))
+    outside = int((~covers(boundary, pts)).sum())
+    # A few edge centroids can sit just outside a jagged admin line; large
+    # counts mean the grid was filled from the bounding box instead.
+    if outside > max(40, int(0.04 * len(grid))):
+        return f"grid extends outside admin boundary ({outside}/{len(grid)} cells)"
+    return None
+
+
 def is_cache_current(city_dir: Path) -> tuple[bool, str]:
     geojson = city_dir / "hexes.geojson"
     if not geojson.exists():
@@ -140,6 +167,10 @@ def is_cache_current(city_dir: Path) -> tuple[bool, str]:
     empty_daily = _empty_daily_needs_cache(cache)
     if empty_daily:
         return False, empty_daily
+
+    spill = _grid_outside_boundary(cache)
+    if spill:
+        return False, spill
 
     try:
         with open(geojson, encoding="utf-8") as fh:

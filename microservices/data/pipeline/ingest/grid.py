@@ -40,6 +40,8 @@ def fetch_boundary(ctx: CityContext) -> shape:
 
 
 def build_grid(ctx: CityContext) -> gpd.GeoDataFrame:
+    from shapely.geometry import Point
+
     boundary = fetch_boundary(ctx)
     log(STEP, f"filling {ctx.name} boundary with H3 res {config.H3_RES} cells")
 
@@ -48,8 +50,15 @@ def build_grid(ctx: CityContext) -> gpd.GeoDataFrame:
     log(STEP, f"{len(cells)} candidate cells")
 
     rows = []
+    dropped = 0
     for cell in cells:
         lat, lng = h3.cell_to_latlng(cell)
+        # Keep only cells whose centre is inside the admin polygon. Older caches
+        # sometimes filled the bounding box; without this filter the map paints
+        # neighbouring Gemeinden (Karlsfeld, Unterhaching, …).
+        if not boundary.covers(Point(lng, lat)):
+            dropped += 1
+            continue
         boundary_latlng = h3.cell_to_boundary(cell)
         poly = Polygon([(lo, la) for la, lo in boundary_latlng])
         rows.append(
@@ -61,6 +70,8 @@ def build_grid(ctx: CityContext) -> gpd.GeoDataFrame:
             }
         )
 
+    if dropped:
+        log(STEP, f"dropped {dropped} cells outside admin boundary")
     gdf = gpd.GeoDataFrame(rows, crs=config.WGS84)
     log(STEP, f"grid built: {len(gdf)} cells")
     return gdf
