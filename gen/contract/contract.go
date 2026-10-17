@@ -6,7 +6,7 @@ package contract
 
 const ScoreMethodVersion = "objective-v2"
 
-const PipelineVersion = 17
+const PipelineVersion = 18
 
 // ObjectiveWeights are the pillar weights of the objective Living Score.
 var ObjectiveWeights = map[string]float64{
@@ -22,24 +22,17 @@ var ObjectiveWeights = map[string]float64{
 var DeclaredHexProperties = []string{
 	"h3",
 	"s_living",
-	"s_objective",
 	"s_daily_life",
-	"s_daily_needs",
 	"s_walk",
-	"s_walking_quality",
 	"s_transit",
-	"s_transit_service",
 	"s_green",
 	"s_green_strict",
 	"s_quiet",
-	"s_noise",
 	"s_housing_affordability",
-	"s_housing_value",
 	"s_urban_form",
 	"s_center",
 	"s_center_strict",
 	"s_urban_activity",
-	"s_business",
 	"s_transport",
 	"s_heat",
 	"s_traffic_safety",
@@ -140,17 +133,14 @@ var RequiredHexProperties = []string{
 	"s_living",
 	"s_daily_life",
 	"s_walk",
-	"s_walking_quality",
 	"s_transit",
 	"s_green",
 	"s_quiet",
-	"s_housing_value",
+	"s_housing_affordability",
 	"s_urban_form",
 	"s_center",
 	"s_urban_activity",
-	"s_business",
 	"s_transport",
-	"s_noise",
 	"center_min",
 	"urban_activity",
 	"business_count",
@@ -170,7 +160,7 @@ var HexServiceProperties = []string{
 	"s_transit",
 	"s_center",
 	"s_quiet",
-	"s_housing_value",
+	"s_housing_affordability",
 	"center_min",
 	"dn_supermarket_min",
 	"dn_pharmacy_min",
@@ -189,9 +179,9 @@ var HexPillarKeys = map[string]string{
 	"walk": "s_walk",
 	"green": "s_green",
 	"transit": "s_transit",
-	"center": "s_center",
+	"centrality": "s_center",
 	"quiet": "s_quiet",
-	"housing_value": "s_housing_value",
+	"housing_affordability": "s_housing_affordability",
 }
 
 // HexWalkMinuteKeys maps walk-minute labels to hex property names.

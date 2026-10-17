@@ -14,12 +14,8 @@ import {
   LIVING_WEIGHTS,
   OBJECTIVE_WEIGHTS,
   PERSONAL_PILLAR_KEYS,
+  computeObjectivePillars,
   dailyLifeFromGroups,
-  scoreCentrality,
-  scoreGreen,
-  scoreHousingAffordability,
-  scoreQuiet,
-  scoreTransit,
   scoreWalk,
   walkMinuteBandScore,
 } from './objective';
@@ -113,7 +109,6 @@ export type PresetDefinition = Record<string, number> & {
   dl_services?: number;
   dl_restaurants_cafes?: number;
   dl_leisure?: number;
-  dl_other?: number;
 };
 
 /** Infra-only: every profile is 100% daily_life (shops, cafés, services). */
@@ -161,20 +156,19 @@ export function pillarScores(
   _affordabilityFocus = 0,
 ): Record<string, number | null> {
   void _affordabilityFocus;
+  const pillars = computeObjectivePillars(p).pillars;
   const daily = hasCustomGroupMultipliers(groupMultipliers)
-    ? dailyLifeFromGroups(p, groupMultipliers)
-    : dailyLifeFromGroups(p, null);
+    ? dailyLifeFromGroups(p, groupMultipliers).score
+    : pillars.daily_life;
 
   return {
-    daily_life: daily.score,
-    walk: scoreWalk(p).score,
-    green: scoreGreen(p).score,
-    transit: scoreTransit(p).score,
-    quiet: scoreQuiet(p).score,
-    housing_affordability: scoreHousingAffordability(p).score,
-    centrality: scoreCentrality(p).score,
-    // Legacy alias for older UI
-    housing_value: scoreHousingAffordability(p).score,
+    daily_life: daily,
+    walk: pillars.walk,
+    green: pillars.green,
+    transit: pillars.transit,
+    quiet: pillars.quiet,
+    housing_affordability: pillars.housing_affordability,
+    centrality: pillars.centrality,
   };
 }
 
@@ -203,11 +197,7 @@ export function extractPillarWeights(
 ): Record<string, number> {
   const w: Record<string, number> = {};
   let sum = 0;
-  // Accept housing_value as alias for housing_affordability
-  const src = { ...presetOrWeights };
-  if (src.housing_value != null && src.housing_affordability == null) {
-    src.housing_affordability = src.housing_value;
-  }
+  const src = presetOrWeights;
   for (const k of PERSONAL_PILLAR_KEYS) {
     const v = Number(src[k]);
     w[k] = Number.isFinite(v) && v > 0 ? v : 0;
@@ -222,7 +212,7 @@ export function extractGroupMultipliers(
   preset: Record<string, number>,
 ): Record<string, number> {
   const out: Record<string, number> = {};
-  const groups = [...Object.keys(DAILY_LIFE_GROUP_WEIGHTS), 'other'];
+  const groups = Object.keys(DAILY_LIFE_GROUP_WEIGHTS);
   for (const g of groups) {
     const key = `dl_${g}`;
     if (preset[key] != null) out[key] = Number(preset[key]) || 1;
@@ -235,7 +225,7 @@ export function walkMinuteDecayScore(minutes: unknown): number | null {
   return walkMinuteBandScore(minutes);
 }
 
-/** Derive walking quality when pipeline pillar is missing (schema < 11). */
+/** Walk pillar from the export. Missing `s_walk` is null. */
 export function deriveWalkingQuality(p: PipelinePoint): number | null {
   return scoreWalk(p).score;
 }

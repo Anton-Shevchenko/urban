@@ -8,7 +8,6 @@ import { describe, expect, it } from 'vitest';
 
 import {
   DAILY_LIFE_CATEGORY_WEIGHTS,
-  DAILY_LIFE_GROUP_ALIASES,
   DAILY_LIFE_GROUP_WEIGHTS,
   DECLARED_HEX_PROPERTIES,
   FRONTEND_HEX_PROPERTIES,
@@ -28,10 +27,8 @@ const CONTRACT_DIR = join(__dirname, '..', '..', '..', 'contracts');
 type ScoringContract = {
   score_method_version: string;
   objective_weights: Record<string, number>;
-  objective_weight_aliases: Record<string, string>;
   daily_life: {
     group_weights: Record<string, number>;
-    group_aliases: Record<string, string>;
     category_weights: Record<string, Record<string, number>>;
   };
   walk_minute_bands: Record<string, [number, number][]>;
@@ -56,7 +53,8 @@ describe('generated contract matches contracts/scoring.json', () => {
   it('keeps daily-life tables in sync', () => {
     expect(DAILY_LIFE_GROUP_WEIGHTS).toEqual(source.daily_life.group_weights);
     expect(DAILY_LIFE_CATEGORY_WEIGHTS).toEqual(source.daily_life.category_weights);
-    expect(DAILY_LIFE_GROUP_ALIASES).toEqual(source.daily_life.group_aliases);
+    expect(SCORE_PROPS).not.toHaveProperty('walking_quality');
+    expect(SCORE_PROPS).not.toHaveProperty('housing_value');
   });
 
   it('keeps SCORE_PROPS aligned with the metric registry', () => {
@@ -135,7 +133,7 @@ describe('hex property contract holds for the bundled export', () => {
       's_green',
       's_transit',
       's_quiet',
-      's_housing_value',
+      's_housing_affordability',
       's_center',
       'center_min',
       'noise_db',

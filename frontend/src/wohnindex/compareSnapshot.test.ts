@@ -62,6 +62,7 @@ const dailyLifeProps = {
   dn_sports_avail: 80,
   dn_playground_min: 5,
   dn_playground_avail: 100,
+  s_daily_life: 72,
   rent_eur_m2: 18.5,
 };
 
@@ -90,16 +91,23 @@ describe('toggleCompareList', () => {
     expect(list[0].citySlug).toBe('berlin');
   });
 
-  it('snapshots walk-minute fields so the hex still scores after the city unloads', () => {
+  it('snapshots the canonical pillar so the hex still scores after the city unloads', () => {
     const feature = hexFeature('hex-m', dailyLifeProps);
     const [item] = toggleCompareList([], feature, { citySlug: 'muenchen', cityName: 'München' });
     expect(item.props.dn_supermarket_min).toBe(6);
+    expect(item.props.s_daily_life).toBe(72);
     expect(item.pricePerM2).toBe(18.5);
     expect(item.lng).toBeCloseTo(11.1);
     expect(item.lat).toBeCloseTo(48.1);
     const score = locationScore(item.props);
-    expect(score.objectiveScore).not.toBeNull();
-    expect(score.objectiveScore).toBeGreaterThan(0);
+    expect(score.objectiveScore).toBe(72);
+  });
+
+  it('does not invent an objective score from walk minutes alone', () => {
+    const minutesOnly: Record<string, unknown> = { ...dailyLifeProps };
+    delete minutesOnly.s_daily_life;
+    const score = locationScore(snapshotHexProps(minutesOnly));
+    expect(score.objectiveScore).toBeNull();
   });
 
   it('caps the list instead of dropping older cities', () => {

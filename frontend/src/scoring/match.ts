@@ -29,15 +29,15 @@ export const MATCH_PROP: Record<MatchDim, string> = {
   price: 's_match_price',
 };
 
-/** Fallback props when s_match_* is missing (schema < 12). */
+/** Canonical pillar when the match-specific column is absent. */
 const MATCH_FALLBACK: Record<MatchDim, string[]> = {
   centrality: ['s_center'],
-  infrastructure: ['s_daily_life', 's_daily_needs'],
-  walk: ['s_walking_quality'],
+  infrastructure: ['s_daily_life'],
+  walk: ['s_walk'],
   green: ['s_green'],
-  transit: ['s_transit', 's_transit_service'],
-  quiet: ['s_noise'],
-  price: ['s_rent_relative_city', 's_rent_absolute'],
+  transit: ['s_transit'],
+  quiet: ['s_quiet'],
+  price: ['s_rent_relative_city'],
 };
 
 export const MATCH_LABELS: Record<MatchDim, string> = {

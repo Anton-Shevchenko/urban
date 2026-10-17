@@ -30,7 +30,6 @@ import {
   detectHasRent,
   factorScoreSpread,
   loadJson,
-  normalizeLegacyProps,
   readDebugFlag,
 } from './helpers';
 import { snapshotHexProps } from './compareSnapshot';
@@ -213,7 +212,7 @@ export function useWohnIndexStore(options: UseWohnIndexOptions = {}) {
       const pillarKeys = [
         'daily_life', 'walk', 'green', 'transit', 'centrality', 'quiet', 'housing_affordability',
       ] as const;
-      const resolvedKey = key === 'housing_value' ? 'housing_affordability' : key;
+      const resolvedKey = key;
       if (!(pillarKeys as readonly string[]).includes(resolvedKey)) return;
       const target = Math.max(0, Math.min(100, percent)) / 100;
       setActiveProfile('custom');
@@ -224,9 +223,7 @@ export function useWohnIndexStore(options: UseWohnIndexOptions = {}) {
         const cur: Record<string, number> = {};
         let sumOthers = 0;
         pillarKeys.forEach((k) => {
-          const legacy = k === 'housing_affordability'
-            ? Number(prev.housing_affordability ?? prev.housing_value)
-            : Number(prev[k]);
+          const legacy = Number(prev[k]);
           // Allow explicit 0 — only fall back when the key was never set.
           cur[k] = Number.isFinite(legacy) && legacy >= 0 ? legacy : (LIVING_WEIGHTS[k] ?? 0);
           if (k !== resolvedKey) sumOthers += cur[k];
@@ -370,13 +367,10 @@ export function useWohnIndexStore(options: UseWohnIndexOptions = {}) {
         ['daily_life', 'walk', 'green', 'transit', 'centrality', 'quiet', 'housing_affordability'] as const
       ).forEach((k) => {
         const src = preset as Record<string, number>;
-        nextWeights[k] = src[k]
-          ?? (k === 'housing_affordability' ? src.housing_value : undefined)
-          ?? nextWeights[k]
-          ?? 0;
+        nextWeights[k] = src[k] ?? nextWeights[k] ?? 0;
       });
       (
-        ['dl_food', 'dl_health', 'dl_education', 'dl_services', 'dl_restaurants_cafes', 'dl_leisure', 'dl_other'] as const
+        ['dl_food', 'dl_health', 'dl_education', 'dl_services', 'dl_restaurants_cafes', 'dl_leisure'] as const
       ).forEach((k) => {
         if ((preset as Record<string, number>)[k] != null) {
           nextWeights[k] = (preset as Record<string, number>)[k];
@@ -398,7 +392,7 @@ export function useWohnIndexStore(options: UseWohnIndexOptions = {}) {
       // Profiles affect Your Match only — keep map on current metric mode unless diagnose.
       const keepMode = mapView === 'personal_match' || mapView === 'city_percentile'
         || mapView.startsWith('pillar:')
-        || ['daily_life', 'walk', 'green', 'transit', 'centrality', 'quiet', 'housing_affordability', 'housing_value'].includes(mapView)
+        || ['daily_life', 'walk', 'green', 'transit', 'centrality', 'quiet', 'housing_affordability'].includes(mapView)
         || MAP_VIEW_METRICS.includes(mapView)
         ? mapView
         : 'objective';
@@ -433,19 +427,15 @@ export function useWohnIndexStore(options: UseWohnIndexOptions = {}) {
     ctx.prefInclude = committedPrefInclude;
     ctx.pillarWeights = {
       daily_life: committedWeights.daily_life ?? 0.2,
-      walk: committedWeights.walk ?? committedWeights.walking_quality ?? 0.15,
+      walk: committedWeights.walk ?? 0.15,
       green: committedWeights.green ?? 0.15,
       transit: committedWeights.transit ?? 0.15,
-      centrality: committedWeights.centrality ?? committedWeights.center ?? 0.05,
-      quiet: committedWeights.quiet ?? committedWeights.noise ?? 0.15,
-      housing_affordability:
-        committedWeights.housing_affordability
-        ?? committedWeights.housing_value
-        ?? committedWeights.price
-        ?? 0.15,
+      centrality: committedWeights.centrality ?? 0.05,
+      quiet: committedWeights.quiet ?? 0.15,
+      housing_affordability: committedWeights.housing_affordability ?? 0.15,
     };
     const gm: Record<string, number> = {};
-    ['food', 'health', 'education', 'services', 'restaurants_cafes', 'leisure', 'other'].forEach((g) => {
+    ['food', 'health', 'education', 'services', 'restaurants_cafes', 'leisure'].forEach((g) => {
       const key = `dl_${g}`;
       if (committedWeights[key] != null) gm[key] = committedWeights[key];
     });
@@ -462,7 +452,7 @@ export function useWohnIndexStore(options: UseWohnIndexOptions = {}) {
           || committedMapView.startsWith('pillar:')
           || MAP_VIEW_METRICS.includes(committedMapView)
           ? committedMapView
-          : `pillar:${committedMapView === 'housing_value' ? 'housing_affordability' : committedMapView}`
+          : `pillar:${committedMapView}`
     ) as ScoringContext['mapMetricMode'];
     ctx.dailyNeedsCategories = { ...committedDailyNeeds };
     ctx.desiredAreaM2 = committedArea;
@@ -522,7 +512,6 @@ export function useWohnIndexStore(options: UseWohnIndexOptions = {}) {
   const loadCity = useCallback((geojson: FeatureCollection & { meta?: CityMeta }) => {
     const m = geojson.meta || {};
     const feats = geojson.features;
-    normalizeLegacyProps(feats);
     const rent = detectHasRent(geojson);
     const extended = detectExtendedMetrics(feats);
     setHasRent(rent);
@@ -561,9 +550,6 @@ export function useWohnIndexStore(options: UseWohnIndexOptions = {}) {
       const saved = loadJson<Record<string, number> | null>(STORAGE.pillarWeights, null);
       if (saved && typeof saved.daily_life === 'number') {
         const migrated = { ...saved };
-        if (migrated.housing_affordability == null && migrated.housing_value != null) {
-          migrated.housing_affordability = migrated.housing_value;
-        }
         setWeightsState(migrated);
         setCommittedWeights(migrated);
         setPaintVersion((v) => v + 1);

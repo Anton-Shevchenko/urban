@@ -16,7 +16,7 @@ const props = {
   s_green: 40,
   s_transit: 70,
   s_quiet: 38,
-  s_housing_value: 46,
+  s_housing_affordability: 46,
   s_center: 62,
   dn_supermarket_min: 6,
   dn_pharmacy_min: 8,

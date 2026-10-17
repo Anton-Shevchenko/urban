@@ -72,8 +72,8 @@ Lärm → Quiet-Score (höher = ruhiger) → `s_quiet`.
 ### Bezahlbarkeit
 
 Absolute Kaltmieten-Benchmark (nicht stadt-relativ) → `s_housing_affordability`.
-`s_housing_value` ist nur ein Alias davon; Alltag/ÖPNV/Gehqualität werden hier
-**nicht** eingemischt, sonst würden sie doppelt zählen.
+Alltag/ÖPNV/Gehqualität werden hier **nicht** eingemischt, sonst würden sie
+doppelt zählen.
 
 ### Zentralität (informativ, Gewicht 0)
 

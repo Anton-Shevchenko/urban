@@ -26,30 +26,17 @@ REQUIRED_HEX_PROPERTIES: tuple[str, ...] = generated.REQUIRED_HEX_PROPERTIES
 DECLARED_HEX_PROPERTIES: tuple[str, ...] = generated.DECLARED_HEX_PROPERTIES
 CONSUMER_HEX_PROPERTIES: dict[str, tuple[str, ...]] = generated.CONSUMER_HEX_PROPERTIES
 
-# The pipeline predates the canonical "leisure" group name and still writes
-# "other"; translate once here instead of duplicating the weight tables.
-_LEGACY_GROUP_BY_CANONICAL = {
-    canonical: legacy for legacy, canonical in generated.DAILY_LIFE_GROUP_ALIASES.items()
+DAILY_LIFE_GROUP_WEIGHTS: dict[str, float] = dict(generated.DAILY_LIFE_GROUP_WEIGHTS)
+DAILY_LIFE_CATEGORY_WEIGHTS: dict[str, dict[str, float]] = {
+    group: dict(categories) for group, categories in generated.DAILY_LIFE_CATEGORY_WEIGHTS.items()
 }
-
-
-def _to_pipeline_groups(values: dict[str, Any]) -> dict[str, Any]:
-    return {_LEGACY_GROUP_BY_CANONICAL.get(k, k): v for k, v in values.items()}
-
-
-DAILY_LIFE_GROUP_WEIGHTS: dict[str, float] = _to_pipeline_groups(generated.DAILY_LIFE_GROUP_WEIGHTS)
-DAILY_LIFE_CATEGORY_WEIGHTS: dict[str, dict[str, float]] = _to_pipeline_groups(
-    generated.DAILY_LIFE_CATEGORY_WEIGHTS
-)
 
 WALK_MINUTE_BAND_KNOTS: list[list[float]] = [list(knot) for knot in generated.WALK_MINUTE_BANDS["default"]]
 
 
 def living_score_weights() -> dict[str, float]:
-    """Objective weights plus the legacy aliases older steps still look up."""
+    """Canonical objective weights plus informational pillars (weight 0)."""
     weights = dict(generated.OBJECTIVE_WEIGHTS)
-    for alias, target in generated.OBJECTIVE_WEIGHT_ALIASES.items():
-        weights[alias] = weights[target]
     weights.update(generated.INFORMATIONAL_PILLARS)
     return weights
 

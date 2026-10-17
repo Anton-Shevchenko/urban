@@ -88,16 +88,11 @@ def _green_scores(df: pd.DataFrame) -> tuple[pd.Series, pd.Series]:
     return lenient, strict
 
 
-def _derive_walking_quality(df: pd.DataFrame) -> pd.Series:
-    """Fallback walking quality from traffic safety + green + quiet."""
-    safety = df["s_traffic_safety"] if "s_traffic_safety" in df.columns else pd.Series(55.0, index=df.index)
-    green = df["s_green"] if "s_green" in df.columns else pd.Series(50.0, index=df.index)
-    quiet = df["s_noise"] if "s_noise" in df.columns else pd.Series(50.0, index=df.index)
-    return (
-        (0.45 * safety.astype(float) + 0.30 * green.astype(float) + 0.25 * quiet.astype(float))
-        .clip(0, 100)
-        .round(1)
-    )
+def _require_raw(df: pd.DataFrame, column: str) -> pd.Series:
+    """Canonical factor column. Missing input fails the export instead of a proxy."""
+    if column not in df.columns:
+        raise ValueError(f"export requires {column}; refusing to invent a pillar score")
+    return df[column].astype(float).clip(0, 100)
 
 
 def _derive_urban_form(df: pd.DataFrame) -> pd.Series:
@@ -125,33 +120,10 @@ def _derive_urban_form(df: pd.DataFrame) -> pd.Series:
 
 
 def _weighted_comfort(df: gpd.GeoDataFrame) -> pd.Series:
-    """Primary comfort = 15-Minute Living Score when pillars exist."""
-    if "s_living" in df.columns:
-        return df["s_living"].astype(float).round(1)
-    w = config.DEFAULT_WEIGHTS
-    parts: list[pd.Series] = []
-    weights: list[float] = []
-    mapping = {
-        "daily_needs": "s_daily_needs",
-        "transit_service": "s_transit_service",
-        "walking_quality": "s_walking_quality",
-        "urban_form": "s_urban_form",
-        "green": "s_green",
-        "noise": "s_noise",
-        "traffic_safety": "s_traffic_safety",
-        "price": "s_rent_relative_city",
-        "center": "s_center",
-    }
-    for key, col in mapping.items():
-        weight = w.get(key, 0)
-        if weight <= 0 or col not in df.columns:
-            continue
-        parts.append(df[col].astype(float).fillna(50) * weight)
-        weights.append(weight)
-    if not parts:
-        return pd.Series(50.0, index=df.index)
-    total_w = sum(weights)
-    return (sum(parts) / total_w).round(1)
+    """Comfort copy of the objective Living Score. Not a second formula."""
+    if "s_living" not in df.columns:
+        raise ValueError("export requires s_living before comfort")
+    return df["s_living"].astype(float).round(1)
 
 
 def _hex_data_quality(row: pd.Series) -> str:
@@ -247,7 +219,6 @@ def build(ctx: CityContext) -> gpd.GeoDataFrame:
         )
         df["s_center_strict"] = center_anchor_strict(df["center_min"])
     df["s_urban_activity"] = _scale(df["urban_activity"], invert=False, log_compress=True)
-    df["s_business"] = df["s_urban_activity"]
     df["s_transport"] = _scale(df["transport_score"], invert=False, log_compress=True)
     # Centrality: 80% activity-center proximity + 20% destination/transit access.
     dest_access = df["s_transport"]
@@ -257,54 +228,31 @@ def build(ctx: CityContext) -> gpd.GeoDataFrame:
         ).clip(0, 100)
     df["centrality_raw"] = centrality_index(center_prox, dest_access)
 
+    if "noise_db" not in df.columns:
+        raise ValueError("export requires noise_db; refusing to invent s_quiet")
     df["quiet_raw"] = noise_quiet_score(df["noise_db"])
 
-    if "daily_life_raw" in df.columns:
-        daily_raw = df["daily_life_raw"].astype(float).clip(0, 100)
-    elif "s_daily_life" in df.columns:
-        daily_raw = df["s_daily_life"].astype(float).clip(0, 100)
-    elif "daily_needs_score" in df.columns:
-        daily_raw = df["daily_needs_score"].astype(float).clip(0, 100)
-    else:
-        daily_raw = pd.Series(50.0, index=df.index)
+    daily_raw = _require_raw(df, "daily_life_raw")
+    transit_raw = _require_raw(df, "transit_service_raw")
+    walk_raw = _require_raw(df, "walking_quality_raw")
     df["daily_life_raw"] = daily_raw
-
-    if "transit_service_raw" in df.columns:
-        transit_raw = df["transit_service_raw"].astype(float).clip(0, 100)
-    elif "transit_service_score" in df.columns:
-        transit_raw = df["transit_service_score"].astype(float).clip(0, 100)
-    else:
-        transit_raw = pd.Series(50.0, index=df.index)
     df["transit_raw"] = transit_raw
-
-    if "walking_quality_raw" in df.columns:
-        walk_raw = df["walking_quality_raw"].astype(float).clip(0, 100)
-    elif "s_walking_quality" in df.columns:
-        walk_raw = df["s_walking_quality"].astype(float).clip(0, 100)
-    elif "walking_quality_score" in df.columns:
-        walk_raw = df["walking_quality_score"].astype(float).clip(0, 100)
-    else:
-        walk_raw = _derive_walking_quality(df)
     df["walk_raw"] = walk_raw
 
-    # --- Objective pillars (absolute) + city-context legacy columns --------
+    # --- Objective pillars (absolute) + city-context diagnostic columns ----
     # objective-v2: s_* pillars used for Living Score are absolute / raw.
     # City-normalized copies kept as s_*_city for diagnostics / percentile.
     df["s_daily_life"] = daily_raw.clip(0, 100).round(1)
     df["s_daily_life_city"] = city_normalize(daily_raw, city_type, "daily_life")
-    df["s_daily_needs"] = df["s_daily_life"]
     df["s_walk"] = walk_raw.clip(0, 100).round(1)
     df["s_walk_city"] = city_normalize(walk_raw, city_type, "walk")
-    df["s_walking_quality"] = df["s_walk"]
     df["s_transit"] = transit_raw.clip(0, 100).round(1)
     df["s_transit_city"] = city_normalize(transit_raw, city_type, "transit")
-    df["s_transit_service"] = df["s_transit"]
     df["s_green"] = df["green_raw"].clip(0, 100).round(1)
     df["s_green_city"] = city_normalize(df["green_raw"], city_type, "green")
     df["s_center"] = city_normalize(df["centrality_raw"], city_type, "centrality")
     df["s_quiet"] = df["quiet_raw"].clip(0, 100).round(1)
     df["s_quiet_city"] = city_normalize(df["quiet_raw"], city_type, "quiet")
-    df["s_noise"] = df["s_quiet"]  # quiet = high
 
     if "heat_resilience_score" in df.columns:
         heat_spread = df["heat_resilience_score"].max() - df["heat_resilience_score"].min()
@@ -356,11 +304,8 @@ def build(ctx: CityContext) -> gpd.GeoDataFrame:
             df["s_transit"],
             df["s_daily_life"],
         )
-        # Legacy alias — affordability only (no daily_life/walk/transit double-count).
-        df["s_housing_value"] = df["s_housing_affordability"]
     else:
         df["s_housing_affordability"] = pd.Series(np.nan, index=df.index)
-        df["s_housing_value"] = df["s_housing_affordability"]
 
     df["s_living"] = living_score_composite(
         {
@@ -373,7 +318,6 @@ def build(ctx: CityContext) -> gpd.GeoDataFrame:
         },
         config.LIVING_SCORE_WEIGHTS,
     )
-    df["s_objective"] = df["s_living"]
 
     # Value Opportunity Index (Hidden Gems) — analytical overlay, not Living Score.
     from pipeline.export.value_opportunity import compute_value_opportunity

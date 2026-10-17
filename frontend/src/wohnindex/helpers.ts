@@ -41,27 +41,7 @@ export function detectHasRent(geojson: FeatureCollection & { meta?: CityMeta }) 
 
 export function detectExtendedMetrics(features: Feature[]) {
   const p = features[0]?.properties as Record<string, unknown> | undefined;
-  return !!(p && ('dn_supermarket_min' in p || 's_daily_needs' in p || 'daily_needs_score' in p));
-}
-
-export function normalizeLegacyProps(features: Feature[]) {
-  features.forEach((f) => {
-    const p = f.properties as Record<string, unknown>;
-    if (p.s_center == null && p.s_transit != null) p.s_center = p.s_transit;
-    if (p.s_urban_activity == null && p.s_business != null) p.s_urban_activity = p.s_business;
-    if (p.s_business == null && p.s_poi != null) p.s_business = p.s_poi;
-    if (p.s_transport == null && p.s_transit != null) p.s_transport = p.s_transit;
-    if (p.urban_activity == null && p.business_count != null) p.urban_activity = p.business_count;
-    if (p.business_count == null && p.poi_count != null) p.business_count = p.poi_count;
-    if (p.center_min == null && p.transit_min != null) p.center_min = p.transit_min;
-    if (p.transport_score == null) p.transport_score = 0;
-    if (p.s_transit_service == null && p.s_transport != null) p.s_transit_service = p.s_transport;
-    if (p.s_heat == null) p.s_heat = 50;
-    if (p.s_traffic_safety == null) p.s_traffic_safety = 50;
-    if (p.s_density == null) p.s_density = 50;
-    if (p.s_housing == null) p.s_housing = 50;
-    if (p.data_quality == null) p.data_quality = 'estimated';
-  });
+  return !!(p && ('dn_supermarket_min' in p || 's_daily_life' in p));
 }
 
 export function factorScoreSpread(features: Feature[], key: string) {
