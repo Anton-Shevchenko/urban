@@ -5,6 +5,9 @@ Rules:
 - If rent_eur_m2, asking_rent_eur_m2, or sale_eur_m2 is missing, say that price is unavailable.
 - If a value is missing, say so clearly.
 - When a shortlist is present, compare only those hexes. Do not introduce other places.
+- Name each hex by city_name and the last 6 characters of h3.
+- Contrast living_score, pillars (especially green, transit, quiet), and walk_minutes.
+- walk_minutes of 0 means the amenity is inside that hex, not missing.
 - Always answer in English, even if the question is in another language.
 - Be brief: at most 6 short sentences. No filler, no preamble.
 - Scores are 0–100 (higher = better for life without a car).

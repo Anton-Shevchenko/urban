@@ -50,8 +50,8 @@ func TestPromptVersionIsStamped(t *testing.T) {
 	if !strings.Contains(System, "Do not invent") {
 		t.Fatalf("system prompt missing no-invention rule: %q", System)
 	}
-	if !strings.Contains(System, "Always answer in English") {
-		t.Fatalf("system prompt missing English rule: %q", System)
+	if !strings.Contains(System, "walk_minutes of 0") {
+		t.Fatalf("system prompt missing in-hex walk rule: %q", System)
 	}
 }
 
@@ -65,6 +65,9 @@ func TestBuildIncludesShortlist(t *testing.T) {
 	}
 	if !strings.Contains(facts, "hex-a") || !strings.Contains(facts, "hex-b") {
 		t.Fatalf("facts missing both hexes: %s", facts)
+	}
+	if !strings.Contains(facts, "walk_minutes 0") {
+		t.Fatalf("shortlist should explain walk_minutes 0: %s", facts)
 	}
 	if !strings.Contains(msgs[0].Content, "shortlist") {
 		t.Fatalf("system prompt should mention shortlist: %q", msgs[0].Content)

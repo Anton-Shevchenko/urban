@@ -81,6 +81,7 @@ func factsUserContent(focus *hexv1.Hex, peers []*hexv1.Hex) string {
 	if len(clean) == 0 {
 		return b.String()
 	}
+	b.WriteString("\n\nCompare the focus hex with this shortlist. Say who is better on living_score, green, transit, quiet, and daily amenities. walk_minutes 0 = amenity inside the hex.\n")
 	raw := make([]json.RawMessage, 0, len(clean))
 	for _, p := range clean {
 		raw = append(raw, json.RawMessage(hexJSON(p)))
