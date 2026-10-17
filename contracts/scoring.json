@@ -1,5 +1,5 @@
 {
-  "$comment": "infra-only branch: objective score ≡ daily_life (shops, cafés, doctors, schools). Other pillars stay in the contract at weight 0 so exports and UI types do not drift. Consumed by the Python pipeline, the frontend scoring engine and the Go services. Run `make contract-check` after edits.",
+  "$comment": "Objective score is the sum of pillars with weight > 0. Today that is daily_life (shops, cafés, doctors, schools). Other pillars stay in the contract at weight 0 so exports and UI types do not drift. Consumed by the Python pipeline, the frontend scoring engine and the Go services. Run `make contract-check` after edits.",
   "score_method_version": "objective-v2",
   "objective_weights": {
     "daily_life": 1.0,
@@ -27,9 +27,6 @@
       "services": 0.15,
       "restaurants_cafes": 0.10,
       "leisure": 0.10
-    },
-    "group_aliases": {
-      "other": "leisure"
     },
     "category_weights": {
       "food": { "supermarket": 0.60, "market": 0.25, "bakery": 0.15 },

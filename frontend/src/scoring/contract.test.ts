@@ -8,7 +8,6 @@ import { describe, expect, it } from 'vitest';
 
 import {
   DAILY_LIFE_CATEGORY_WEIGHTS,
-  DAILY_LIFE_GROUP_ALIASES,
   DAILY_LIFE_GROUP_WEIGHTS,
   DECLARED_HEX_PROPERTIES,
   FRONTEND_HEX_PROPERTIES,
@@ -18,6 +17,7 @@ import {
   SCORE_METHOD_VERSION,
   SCORE_PROPS,
   WALK_MINUTE_BANDS,
+  WEIGHTED_PILLAR_KEYS,
   MAP_VIEW_METRICS,
 } from './generated/contract';
 import { ACCESSIBILITY_BANDS, bandScore } from './normalization';
@@ -31,7 +31,6 @@ type ScoringContract = {
   objective_weight_aliases: Record<string, string>;
   daily_life: {
     group_weights: Record<string, number>;
-    group_aliases: Record<string, string>;
     category_weights: Record<string, Record<string, number>>;
   };
   walk_minute_bands: Record<string, [number, number][]>;
@@ -51,12 +50,17 @@ describe('generated contract matches contracts/scoring.json', () => {
   it('keeps objective weights in sync', () => {
     expect(OBJECTIVE_WEIGHTS).toEqual(source.objective_weights);
     expect(OBJECTIVE_PILLAR_KEYS).toEqual(Object.keys(source.objective_weights));
+    expect(WEIGHTED_PILLAR_KEYS).toEqual(
+      Object.entries(source.objective_weights)
+        .filter(([, weight]) => weight > 0)
+        .map(([key]) => key),
+    );
   });
 
   it('keeps daily-life tables in sync', () => {
     expect(DAILY_LIFE_GROUP_WEIGHTS).toEqual(source.daily_life.group_weights);
     expect(DAILY_LIFE_CATEGORY_WEIGHTS).toEqual(source.daily_life.category_weights);
-    expect(DAILY_LIFE_GROUP_ALIASES).toEqual(source.daily_life.group_aliases);
+    expect(DAILY_LIFE_GROUP_WEIGHTS).not.toHaveProperty('other');
   });
 
   it('keeps SCORE_PROPS aligned with the metric registry', () => {

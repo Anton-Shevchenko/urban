@@ -85,7 +85,7 @@ def check_contract(
                 f"daily_life.category_weights.{group} must sum to 1.0, got {cat_total}"
             )
 
-    for alias, target in scoring["daily_life"]["group_aliases"].items():
+    for alias, target in scoring["daily_life"].get("group_aliases", {}).items():
         if target not in groups:
             raise SystemExit(
                 f"daily_life.group_aliases.{alias} points at unknown group {target}"
@@ -157,6 +157,11 @@ def _matches_pattern(key: str, schema: dict[str, Any]) -> bool:
 
 def canonical_daily_life(scoring: dict[str, Any]) -> dict[str, Any]:
     return strip_comments(scoring["daily_life"])
+
+
+def weighted_pillar_keys(scoring: dict[str, Any]) -> list[str]:
+    """Objective pillars that actually enter the score (weight > 0)."""
+    return [key for key, weight in scoring["objective_weights"].items() if float(weight) > 0]
 
 
 def pipeline_steps(metrics: dict[str, Any]) -> list[dict[str, Any]]:
@@ -253,13 +258,13 @@ def render_python(
         "",
         f"OBJECTIVE_WEIGHTS: dict[str, float] = {lit(scoring['objective_weights'])}",
         "",
+        f"WEIGHTED_PILLAR_KEYS: tuple[str, ...] = {lit(tuple(weighted_pillar_keys(scoring)))}",
+        "",
         f"OBJECTIVE_WEIGHT_ALIASES: dict[str, str] = {lit(scoring['objective_weight_aliases'])}",
         "",
         f"INFORMATIONAL_PILLARS: dict[str, float] = {lit(strip_comments(scoring['informational_pillars']))}",
         "",
         f"DAILY_LIFE_GROUP_WEIGHTS: dict[str, float] = {lit(daily['group_weights'])}",
-        "",
-        f"DAILY_LIFE_GROUP_ALIASES: dict[str, str] = {lit(daily['group_aliases'])}",
         "",
         f"DAILY_LIFE_CATEGORY_WEIGHTS: dict[str, dict[str, float]] = {lit(daily['category_weights'])}",
         "",
@@ -399,6 +404,11 @@ def render_typescript(
         + _ts_flat_map(scoring["objective_weights"])
         + ";",
         "",
+        "/** Objective pillars with weight > 0. UI and the active score read this, not a hardcoded list. */",
+        "export const WEIGHTED_PILLAR_KEYS: ObjectivePillarKey[] = [",
+        quoted_list(weighted_pillar_keys(scoring)),
+        "];",
+        "",
         "/** Legacy pillar names still emitted by the pipeline. */",
         "export const OBJECTIVE_WEIGHT_ALIASES: Record<string, ObjectivePillarKey> = "
         + _ts_flat_string_map(scoring["objective_weight_aliases"])
@@ -411,10 +421,6 @@ def render_typescript(
         "",
         "export const DAILY_LIFE_GROUP_WEIGHTS: Record<string, number> = "
         + _ts_flat_map(daily["group_weights"])
-        + ";",
-        "",
-        "export const DAILY_LIFE_GROUP_ALIASES: Record<string, string> = "
-        + _ts_flat_string_map(daily["group_aliases"])
         + ";",
         "",
         "export const DAILY_LIFE_CATEGORY_WEIGHTS: Record<string, Record<string, number>> = "
@@ -513,6 +519,11 @@ def render_go(
         "// ObjectiveWeights are the pillar weights of the objective Living Score.",
         "var ObjectiveWeights = map[string]float64{",
         weight_entries,
+        "}",
+        "",
+        "// WeightedPillarKeys are objective pillars with weight > 0.",
+        "var WeightedPillarKeys = []string{",
+        go_string_slice(weighted_pillar_keys(scoring)),
         "}",
         "",
         "// DeclaredHexProperties lists every property the pipeline may export.",

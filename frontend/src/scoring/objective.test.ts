@@ -2,11 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   PRESETS,
   cityPercentileForScore,
-  dailyLifeFromGroups,
   livingScore,
   locationScore,
   personalAffordabilityMultiplier,
-  scoreDailyLifeGroup,
   shouldPaintAbsolute,
 } from './formulas';
 import { OBJECTIVE_WEIGHTS, scoreHousingAffordability } from './objective';
@@ -51,6 +49,11 @@ const fullPoint = {
   s_rent_relative_city: 40,
   s_center: 70,
   s_center_strict: 40,
+  s_daily_life: 72,
+  s_walk: 60,
+  s_transit: 55,
+  s_quiet: 42,
+  s_housing_affordability: 65,
 };
 
 describe('objective vs personal independence', () => {
@@ -62,8 +65,9 @@ describe('objective vs personal independence', () => {
       groupMultipliers: { dl_health: 1.8 },
     });
     expect(a.objectiveScore).toBe(b.objectiveScore);
-    // Group multipliers still recompute daily_life for personal match.
-    expect(a.personalMatchScore).not.toBe(b.personalMatchScore);
+    expect(a.objectiveScore).toBe(72);
+    // Group multipliers do not recompute daily life; profiles share the contract weights.
+    expect(a.personalMatchScore).toBe(b.personalMatchScore);
   });
 
   it('identical raw inputs yield identical objective across cities', () => {
@@ -110,32 +114,16 @@ describe('missing data', () => {
   });
 });
 
-describe('daily life aggregation', () => {
-  it('nearby bakery does not make food group 100 when supermarket is far', () => {
-    const food = scoreDailyLifeGroup(
-      {
-        dn_bakery_min: 2,
-        dn_bakery_avail: 100,
-        dn_supermarket_min: 25,
-        dn_supermarket_avail: 0,
-        dn_market_min: 30,
-        dn_market_avail: 0,
-      },
-      'food',
-    );
-    expect(food.score).not.toBeNull();
-    expect(food.score!).toBeLessThan(70);
-  });
-
-  it('does not use precomputed dl_* max groups for objective', () => {
-    const withDl = dailyLifeFromGroups({
+describe('daily life pillar', () => {
+  it('reads the exported pillar and ignores legacy dl_* group scores', () => {
+    const scored = locationScore({
+      s_daily_life: 40,
       dl_food: 100,
-      dn_supermarket_min: 25,
-      dn_bakery_min: 2,
-      dn_market_min: 30,
+      dl_other: 100,
+      dn_supermarket_min: 2,
     });
-    // Score must come from categories, not dl_food=100 alone.
-    expect(withDl.score).not.toBe(100);
+    expect(scored.objectiveScore).toBe(40);
+    expect(scored.pillars.daily_life).toBe(40);
   });
 });
 

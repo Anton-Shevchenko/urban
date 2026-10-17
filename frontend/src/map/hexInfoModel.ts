@@ -8,11 +8,11 @@ import type { PersonalPillarKey, PipelinePoint, ScoringEngine } from '../scoring
 
 /** Pillars from contracts/metrics.json `hex_fact_sheet.pillars`. */
 export const HEX_PILLAR_FACTS: { key: string; props: string[]; labelKey: string; scoreKey: PersonalPillarKey }[] = [
-  { key: 'daily_life', props: ['s_daily_life', 's_daily_needs'], labelKey: 'daily_life', scoreKey: 'daily_life' },
-  { key: 'walk', props: ['s_walk', 's_walking_quality'], labelKey: 'walk', scoreKey: 'walk' },
+  { key: 'daily_life', props: ['s_daily_life'], labelKey: 'daily_life', scoreKey: 'daily_life' },
+  { key: 'walk', props: ['s_walk'], labelKey: 'walk', scoreKey: 'walk' },
   { key: 'green', props: ['s_green'], labelKey: 'green', scoreKey: 'green' },
-  { key: 'transit', props: ['s_transit', 's_transit_service'], labelKey: 'transit', scoreKey: 'transit' },
-  { key: 'quiet', props: ['s_quiet', 's_noise'], labelKey: 'quiet', scoreKey: 'quiet' },
+  { key: 'transit', props: ['s_transit'], labelKey: 'transit', scoreKey: 'transit' },
+  { key: 'quiet', props: ['s_quiet'], labelKey: 'quiet', scoreKey: 'quiet' },
   { key: 'housing_value', props: ['s_housing_value', 's_housing_affordability'], labelKey: 'housing_value', scoreKey: 'housing_affordability' },
   { key: 'center', props: ['s_center', 's_center_strict'], labelKey: 'centrality', scoreKey: 'centrality' },
 ];

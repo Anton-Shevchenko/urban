@@ -92,7 +92,12 @@ def _derive_walking_quality(df: pd.DataFrame) -> pd.Series:
     """Fallback walking quality from traffic safety + green + quiet."""
     safety = df["s_traffic_safety"] if "s_traffic_safety" in df.columns else pd.Series(55.0, index=df.index)
     green = df["s_green"] if "s_green" in df.columns else pd.Series(50.0, index=df.index)
-    quiet = df["s_noise"] if "s_noise" in df.columns else pd.Series(50.0, index=df.index)
+    if "quiet_raw" in df.columns:
+        quiet = df["quiet_raw"]
+    elif "s_quiet" in df.columns:
+        quiet = df["s_quiet"]
+    else:
+        quiet = pd.Series(50.0, index=df.index)
     return (
         (0.45 * safety.astype(float) + 0.30 * green.astype(float) + 0.25 * quiet.astype(float))
         .clip(0, 100)
@@ -132,12 +137,16 @@ def _weighted_comfort(df: gpd.GeoDataFrame) -> pd.Series:
     parts: list[pd.Series] = []
     weights: list[float] = []
     mapping = {
-        "daily_needs": "s_daily_needs",
-        "transit_service": "s_transit_service",
-        "walking_quality": "s_walking_quality",
+        "daily_needs": "s_daily_life",
+        "daily_life": "s_daily_life",
+        "transit_service": "s_transit",
+        "transit": "s_transit",
+        "walking_quality": "s_walk",
+        "walk": "s_walk",
         "urban_form": "s_urban_form",
         "green": "s_green",
-        "noise": "s_noise",
+        "noise": "s_quiet",
+        "quiet": "s_quiet",
         "traffic_safety": "s_traffic_safety",
         "price": "s_rent_relative_city",
         "center": "s_center",
@@ -279,10 +288,6 @@ def build(ctx: CityContext) -> gpd.GeoDataFrame:
 
     if "walking_quality_raw" in df.columns:
         walk_raw = df["walking_quality_raw"].astype(float).clip(0, 100)
-    elif "s_walking_quality" in df.columns:
-        walk_raw = df["s_walking_quality"].astype(float).clip(0, 100)
-    elif "walking_quality_score" in df.columns:
-        walk_raw = df["walking_quality_score"].astype(float).clip(0, 100)
     else:
         walk_raw = _derive_walking_quality(df)
     df["walk_raw"] = walk_raw
@@ -295,7 +300,6 @@ def build(ctx: CityContext) -> gpd.GeoDataFrame:
     df["s_daily_needs"] = df["s_daily_life"]
     df["s_walk"] = walk_raw.clip(0, 100).round(1)
     df["s_walk_city"] = city_normalize(walk_raw, city_type, "walk")
-    df["s_walking_quality"] = df["s_walk"]
     df["s_transit"] = transit_raw.clip(0, 100).round(1)
     df["s_transit_city"] = city_normalize(transit_raw, city_type, "transit")
     df["s_transit_service"] = df["s_transit"]
@@ -304,7 +308,6 @@ def build(ctx: CityContext) -> gpd.GeoDataFrame:
     df["s_center"] = city_normalize(df["centrality_raw"], city_type, "centrality")
     df["s_quiet"] = df["quiet_raw"].clip(0, 100).round(1)
     df["s_quiet_city"] = city_normalize(df["quiet_raw"], city_type, "quiet")
-    df["s_noise"] = df["s_quiet"]  # quiet = high
 
     if "heat_resilience_score" in df.columns:
         heat_spread = df["heat_resilience_score"].max() - df["heat_resilience_score"].min()

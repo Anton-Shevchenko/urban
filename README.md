@@ -9,10 +9,11 @@ Jedes Gebiet (H3-Hexagon, ~250 m) erhält einen erklärbaren Score **0–100**:
 | 0 | stark autoabhängig |
 | 100 | hochgradig fußläufig / 15-Minuten-Stadt |
 
-## Score-Formel (aktuell: infra-only)
+## Score-Formel
 
 Gewichte stehen **nur** in [`contracts/scoring.json`](contracts/scoring.json).
-Auf diesem Branch ist der objektive Score **100 % Alltag** (`daily_life: 1.0`);
+Der objektive Score summiert die Säulen mit Gewicht **> 0**.
+Aktuell ist das **100 % Alltag** (`daily_life: 1.0`);
 die übrigen Säulen werden weiter exportiert, gehen aber mit Gewicht 0 ein.
 
 Die klassische 6-Säulen-Mischung (20/15/15/15/15/20) ist eine
@@ -91,9 +92,9 @@ Registriert in [`contracts/metrics.json`](contracts/metrics.json) mit
 
 ## Profile
 
-Auf diesem Branch sind alle Profile Kopien der objektiven Gewichte (100 % Alltag).
+Alle Profile kopieren die objektiven Gewichte aus dem Vertrag.
 `PRESETS` in `frontend/src/scoring/formulas.ts` remixen nur `personalMatchScore`,
-sobald die Säulen-Gewichte in `scoring.json` wieder ungleich null sind.
+sobald Säulen in `scoring.json` wieder ein Gewicht größer als 0 bekommen.
 
 ## Datenquellen
 

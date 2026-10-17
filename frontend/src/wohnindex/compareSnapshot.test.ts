@@ -90,16 +90,17 @@ describe('toggleCompareList', () => {
     expect(list[0].citySlug).toBe('berlin');
   });
 
-  it('snapshots walk-minute fields so the hex still scores after the city unloads', () => {
-    const feature = hexFeature('hex-m', dailyLifeProps);
+  it('snapshots the exported pillar so the hex still scores after the city unloads', () => {
+    const feature = hexFeature('hex-m', { ...dailyLifeProps, s_daily_life: 80 });
     const [item] = toggleCompareList([], feature, { citySlug: 'muenchen', cityName: 'München' });
     expect(item.props.dn_supermarket_min).toBe(6);
+    expect(item.props.s_daily_life).toBe(80);
     expect(item.pricePerM2).toBe(18.5);
     expect(item.lng).toBeCloseTo(11.1);
     expect(item.lat).toBeCloseTo(48.1);
-    const score = locationScore(item.props);
-    expect(score.objectiveScore).not.toBeNull();
-    expect(score.objectiveScore).toBeGreaterThan(0);
+    expect(locationScore(item.props).objectiveScore).toBe(80);
+    // Walk minutes alone are not a second scoring engine.
+    expect(locationScore(dailyLifeProps).objectiveScore).toBeNull();
   });
 
   it('caps the list instead of dropping older cities', () => {

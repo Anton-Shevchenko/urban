@@ -211,7 +211,6 @@
       "score_key": "s_walk",
       "label": "Gehqualität",
       "aliases": ["walking_quality"],
-      "alias_keys": ["s_walking_quality"],
       "type": "objective_positive",
       "factor": "walking_quality",
       "meta": { "source": "osm_roads+green+noise", "confidence": 0.55, "year": 2026 }
@@ -242,7 +241,6 @@
       "score_key": "s_quiet",
       "label": "Ruhe",
       "aliases": ["noise"],
-      "alias_keys": ["s_noise"],
       "type": "objective_positive",
       "factor": "noise",
       "meta": { "source": "osm_proxy", "confidence": 0.5, "year": 2026 }

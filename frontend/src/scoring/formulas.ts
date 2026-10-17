@@ -14,7 +14,6 @@ import {
   LIVING_WEIGHTS,
   OBJECTIVE_WEIGHTS,
   PERSONAL_PILLAR_KEYS,
-  dailyLifeFromGroups,
   scoreCentrality,
   scoreGreen,
   scoreHousingAffordability,
@@ -48,14 +47,10 @@ export {
   PERSONAL_PILLAR_KEYS,
   PILLAR_KEYS,
   buildDiagnostics,
-  categoryAccessibilityScore,
-  categoryScoredValue,
   computeObjectivePillars,
   computeObjectiveScore,
-  dailyLifeFromGroups,
   emptyScored,
   scoreCentrality,
-  scoreDailyLifeGroup,
   scoreGreen,
   scoreHousingAffordability,
   scoreQuiet,
@@ -113,7 +108,6 @@ export type PresetDefinition = Record<string, number> & {
   dl_services?: number;
   dl_restaurants_cafes?: number;
   dl_leisure?: number;
-  dl_other?: number;
 };
 
 /** Infra-only: every profile is 100% daily_life (shops, cafés, services). */
@@ -141,39 +135,25 @@ PRESETS.quiet = PRESETS.senior;
 PRESETS.central = PRESETS.no_car;
 PRESETS.business = PRESETS.young_professional;
 
-export function hasCustomGroupMultipliers(
-  groupMultipliers: Record<string, number> | null | undefined,
-): boolean {
-  return !!(
-    groupMultipliers
-    && Object.keys(groupMultipliers).some(
-      (k) => k.startsWith('dl_') && groupMultipliers[k] !== 1,
-    )
-  );
-}
-
 /**
  * Pillar scores for UI / personal match (null when missing — never fake 50).
+ * Daily life is the pipeline pillar. Group multipliers do not recompute it.
  */
 export function pillarScores(
   p: PipelinePoint,
-  groupMultipliers: Record<string, number> | null = null,
+  _groupMultipliers: Record<string, number> | null = null,
   _affordabilityFocus = 0,
 ): Record<string, number | null> {
+  void _groupMultipliers;
   void _affordabilityFocus;
-  const daily = hasCustomGroupMultipliers(groupMultipliers)
-    ? dailyLifeFromGroups(p, groupMultipliers)
-    : dailyLifeFromGroups(p, null);
-
   return {
-    daily_life: daily.score,
+    daily_life: num(p.s_daily_life),
     walk: scoreWalk(p).score,
     green: scoreGreen(p).score,
     transit: scoreTransit(p).score,
     quiet: scoreQuiet(p).score,
     housing_affordability: scoreHousingAffordability(p).score,
     centrality: scoreCentrality(p).score,
-    // Legacy alias for older UI
     housing_value: scoreHousingAffordability(p).score,
   };
 }
@@ -222,7 +202,7 @@ export function extractGroupMultipliers(
   preset: Record<string, number>,
 ): Record<string, number> {
   const out: Record<string, number> = {};
-  const groups = [...Object.keys(DAILY_LIFE_GROUP_WEIGHTS), 'other'];
+  const groups = Object.keys(DAILY_LIFE_GROUP_WEIGHTS);
   for (const g of groups) {
     const key = `dl_${g}`;
     if (preset[key] != null) out[key] = Number(preset[key]) || 1;
@@ -230,7 +210,7 @@ export function extractGroupMultipliers(
   return out;
 }
 
-/** @deprecated Prefer categoryAccessibilityScore — bands replace exponential decay. */
+/** @deprecated Walk-minute bands replace exponential decay. */
 export function walkMinuteDecayScore(minutes: unknown): number | null {
   return walkMinuteBandScore(minutes);
 }

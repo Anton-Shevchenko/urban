@@ -392,8 +392,6 @@ def compute(ctx: CityContext) -> gpd.GeoDataFrame:
     out["intersection_density"] = ix_dens.round(1).values
     out["mean_block_length_m"] = block_len.round(0).values
     out["walking_quality_raw"] = walking_raw.values
-    out["walking_quality_score"] = walking_raw.values
-    out["s_walking_quality"] = walking_raw.values
 
     log(STEP, f"walking quality raw mean={out['walking_quality_raw'].mean():.1f} ({ctx.city_type})")
     return out

@@ -28,8 +28,15 @@ def test_objective_weights_sum_to_one():
     assert abs(sum(generated.OBJECTIVE_WEIGHTS.values()) - 1.0) < 1e-9
 
 
+def test_weighted_pillar_keys_are_positive_weights():
+    assert list(generated.WEIGHTED_PILLAR_KEYS) == [
+        key for key, weight in generated.OBJECTIVE_WEIGHTS.items() if weight > 0
+    ]
+
+
 def test_daily_life_tables_agree_with_contract():
-    # The pipeline writes dl_other where the contract calls the group "leisure".
+    assert "leisure" in config.DAILY_LIFE_GROUP_WEIGHTS
+    assert "other" not in config.DAILY_LIFE_GROUP_WEIGHTS
     assert set(config.DAILY_LIFE_GROUP_WEIGHTS) == set(config.DAILY_LIFE_CATEGORY_WEIGHTS)
     assert abs(sum(config.DAILY_LIFE_GROUP_WEIGHTS.values()) - 1.0) < 1e-9
     for group, categories in config.DAILY_LIFE_CATEGORY_WEIGHTS.items():
