@@ -621,19 +621,10 @@ def export(ctx: CityContext, df: gpd.GeoDataFrame) -> None:
     }
     with open(out_path, "w", encoding="utf-8") as fh:
         json.dump(fc, fh)
-    meta = {
-        **ctx.to_meta(),
-        "center": center,
-        "centers": centers,
-        "center_anchors": anchor_meta,
-        "count": len(features),
-        "metric_types": METRIC_TYPES,
-        "metric_quality": METRIC_META,
-        "pipeline_version": config.PIPELINE_SCHEMA_VERSION,
-        "noise_db_spread": round(float(df["noise_db"].max() - df["noise_db"].min()), 2),
-    }
+    # Same object the API indexes. Parsing the GeoJSON body is not required
+    # to know product, score version, or noise spread.
     with open(ctx.meta_json, "w", encoding="utf-8") as fh:
-        json.dump(meta, fh)
+        json.dump(fc["meta"], fh)
     _write_sidecars(ctx, df, len(features))
     from pipeline.factors import cycleways as cycleways_overlay
 

@@ -31,6 +31,7 @@ transparency of further development — not effort:
 - Versioned prompt `hex_qa.v2.txt`; SSE `done` includes `prompt_version`
 - `contracts/metrics.json` drives pipeline `STEPS`/`WAVES`, UI `SCORE_PROPS`, hex-svc fact-sheet keys
 - Export writes `hexes.parquet` + `city-stats.json` beside GeoJSON; `s_match_*` no longer required
+- City GeoJSON is only the on-disk `hexes.geojson` (hex-svc and the data API read that file). SQLite keeps city metadata and jobs, not a second GeoJSON copy
 
 ## P3 — needed as the city count grows
 
@@ -40,12 +41,6 @@ A city is up to ~14 MB of GeoJSON, downloaded and parsed in full before the
 first paint. Pre-generate `pmtiles` / MVT per city and let MapLibre fetch only
 the visible tiles. This is the single biggest change for perceived speed and
 for serving many cities from one host.
-
-### Stop storing whole GeoJSON as SQLite text
-
-`server/db.py` keeps each city's GeoJSON as a text column. It works and it
-survives restarts, but the DB grows linearly with city count and every read
-deserialises megabytes. Once tiles exist, store tile references instead.
 
 ### DuckDB for cross-city analysis
 

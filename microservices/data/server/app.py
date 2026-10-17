@@ -12,21 +12,20 @@ GET  /api/city/{slug}/hexes.parquet -> property table without geometry
 POST /api/destinations/matrix -> per-hex travel minutes to custom destinations
 
 Generation is expensive (Overpass-bound, minutes) so it runs on a bounded
-worker pool; results are written to data/cities/<slug>/ and persisted in SQLite
-(data/wohnindex.db), as is job status. Frontend is served separately
-(React + nginx).
+worker pool. The city product is the files under data/cities/<slug>/
+(hexes.geojson, meta.json, sidecars). SQLite (data/wohnindex.db) stores only
+the metadata index and job status. Frontend is served separately (React + nginx).
 """
 
 from __future__ import annotations
 
 import os
-import traceback
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from pipeline import config
@@ -87,7 +86,7 @@ def _city_dir(slug: str):
 
 
 def _persist_city(slug: str) -> dict | None:
-    """Write finished city product into SQLite; return meta."""
+    """Index meta.json for a finished city; the GeoJSON stays on disk."""
     return db.upsert_city_from_dir(_city_dir(slug))
 
 
@@ -136,20 +135,7 @@ def _submit_generate(ctx: CityContext) -> None:
 # --- API -------------------------------------------------------------------
 @app.get("/api/cities")
 def list_cities() -> dict:
-    cities = db.list_cities()
-    # Also surface filesystem-only cities (e.g. mid-migration).
-    seen = {c.get("slug") for c in cities}
-    if config.CITIES_DIR.exists():
-        for d in sorted(config.CITIES_DIR.iterdir()):
-            if not d.is_dir() or d.name in seen:
-                continue
-            if not (d / "hexes.geojson").exists():
-                continue
-            meta = load_meta(d) or {"slug": d.name, "name": d.name}
-            cities.append(meta)
-            db.upsert_city_from_dir(d)
-    cities.sort(key=lambda m: (m.get("name") or m.get("slug") or "").lower())
-    return {"cities": cities}
+    return {"cities": db.list_cities()}
 
 
 @app.post("/api/generate")
@@ -165,7 +151,7 @@ def generate(req: GenerateRequest) -> dict:
 
     slug = ctx.slug
 
-    # Prefer current DB entry (fast path without disk schema check).
+    # Metadata index is enough when the on-disk file hex-svc reads is in place.
     if db.is_db_city_current(slug):
         meta = db.get_city_meta(slug)
         if meta is not None:
@@ -215,19 +201,9 @@ def status(slug: str) -> dict:
 
 @app.get("/api/city/{slug}.geojson")
 def city_geojson(slug: str):
-    text = db.get_city_geojson_text(slug)
-    if text is not None and db.is_db_city_current(slug):
-        return Response(content=text, media_type="application/geo+json")
     path = _city_dir(slug) / "hexes.geojson"
-    if path.exists():
-        # Backfill DB while serving from disk.
-        try:
-            db.upsert_city_from_dir(_city_dir(slug))
-        except Exception:  # noqa: BLE001
-            traceback.print_exc()
+    if path.is_file():
         return FileResponse(path, media_type="application/geo+json")
-    if text is not None:
-        return Response(content=text, media_type="application/geo+json")
     raise HTTPException(status_code=404, detail="not generated")
 
 
