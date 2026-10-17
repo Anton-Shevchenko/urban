@@ -72,7 +72,23 @@ def compute(ctx: CityContext) -> gpd.GeoDataFrame:
 
 
 def write_overlay_geojson(ctx: CityContext) -> None:
-    """Sidecar LineString layer for the Radwege map view (not hex fill)."""
+    """Sidecar LineString layer for the Radwege map view (not hex fill).
+
+    Schema 2 infrastructure (``osm_cycle_infra.parquet``) wins. A current schema
+    2 file is left in place so a Wohnindex export cannot replace it with the
+    dedicated-only score cache. Without either, the legacy dedicated lines are
+    written and are not marked schema 2.
+    """
+    from pipeline.ingest.cycle_infra import cycleways_cache_ready, write_cycle_infra_geojson
+
+    infra = ctx.cache(config.OSM_CYCLE_INFRA_FILE)
+    if infra.exists():
+        write_cycle_infra_geojson(ctx, gpd.read_parquet(infra))
+        return
+    if cycleways_cache_ready(ctx.base_dir):
+        log(STEP, "schema 2 cycleways kept; osm_cycleways.parquet stays the score cache")
+        return
+
     dest = ctx.base_dir / config.CYCLEWAYS_GEOJSON_FILE
     dest.parent.mkdir(parents=True, exist_ok=True)
     cache = ctx.cache(config.OSM_CYCLEWAYS_FILE)
@@ -101,11 +117,14 @@ def write_overlay_geojson(ctx: CityContext) -> None:
         kind = ""
         if "kind" in gdf.columns and row["kind"] is not None:
             kind = str(row["kind"])
+        side = ""
+        if "side" in gdf.columns and row["side"] is not None:
+            side = str(row["side"])
         features.append(
             {
                 "type": "Feature",
                 "geometry": geom.__geo_interface__,
-                "properties": {"kind": kind},
+                "properties": {"kind": kind, "side": side},
             }
         )
     dest.write_text(

@@ -152,6 +152,9 @@ class Provider:
 # Nominatim's usage policy is an absolute maximum of 1 request per second.
 NOMINATIM = Provider(name="nominatim", min_interval_s=1.1, attempts=4, timeout_s=30)
 
+# Public Photon (Komoot). Used only for German place suggestions.
+PHOTON = Provider(name="photon", min_interval_s=0.2, attempts=3, timeout_s=12, backoff_s=0.8)
+
 OVERPASS = Provider(
     name="overpass",
     min_interval_s=1.0,

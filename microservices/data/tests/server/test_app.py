@@ -217,12 +217,117 @@ def test_city_geojson_from_db(api):
     assert resp.json() == payload
 
 
-def test_city_cycleways_from_disk(api):
+def _schema2(city, *, schema: int = 2, kind: str = "eigenstaendig", side: str = "") -> None:
+    city.mkdir(parents=True, exist_ok=True)
+    overlay = {
+        "type": "FeatureCollection",
+        "features": [
+            {
+                "type": "Feature",
+                "geometry": {"type": "LineString", "coordinates": [[11.5, 48.1], [11.51, 48.11]]},
+                "properties": {"kind": kind, "side": side, "label": "Eigenständiger Radweg"},
+            }
+        ],
+    }
+    (city / "cycleways.geojson").write_text(json.dumps(overlay), encoding="utf-8")
+    (city / "cycleways.meta.json").write_text(
+        json.dumps(
+            {
+                "schema": schema,
+                "fetched_at": "2026-01-01T00:00:00+00:00",
+                "counts": {kind: 1},
+                "name": "München",
+                "bbox": [48.0, 11.3, 48.3, 11.8],
+                "center": [48.14, 11.57],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+def test_city_cycleways_requires_schema_2(api):
     client, _, cities, _ = api
     city = cities / "muenchen"
-    city.mkdir()
-    overlay = {"type": "FeatureCollection", "features": [{"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[11.5, 48.1], [11.51, 48.11]]}, "properties": {"kind": "cycleway"}}]}
-    (city / "cycleways.geojson").write_text(json.dumps(overlay), encoding="utf-8")
+    _schema2(city)
     resp = client.get("/api/city/muenchen/cycleways.geojson")
     assert resp.status_code == 200
-    assert resp.json()["features"][0]["properties"]["kind"] == "cycleway"
+    props = resp.json()["features"][0]["properties"]
+    assert props["kind"] == "eigenstaendig"
+    assert props["side"] == ""
+
+
+def test_stale_cycleways_are_not_served_and_refresh_is_queued(api, monkeypatch):
+    client, app_mod, cities, _ = api
+    city = cities / "muenchen"
+    _schema2(city, schema=1)
+    (city / "meta.json").write_text(
+        json.dumps(
+            {
+                "slug": "muenchen",
+                "name": "München",
+                "bbox": [48.0, 11.3, 48.3, 11.8],
+                "center": [48.14, 11.57],
+            }
+        ),
+        encoding="utf-8",
+    )
+    submitted = []
+    monkeypatch.setattr(app_mod, "_submit_cycleways", lambda ctx: submitted.append(ctx.slug))
+    monkeypatch.setattr(app_mod, "_submit_generate", lambda ctx: submitted.append(f"generate:{ctx.slug}"))
+
+    resp = client.get("/api/city/muenchen/cycleways.geojson")
+    assert resp.status_code == 404
+    assert submitted == ["muenchen"]
+
+
+def test_post_cycleways_does_not_generate_city(api, monkeypatch):
+    client, app_mod, cities, _ = api
+    ctx = _ctx("landshut", "Landshut", cities / "landshut")
+    monkeypatch.setattr(app_mod, "resolve_city", lambda _q: ctx)
+    submitted = []
+    monkeypatch.setattr(app_mod, "_submit_cycleways", lambda c: submitted.append(("cycle", c.slug)))
+    monkeypatch.setattr(app_mod, "_submit_generate", lambda c: submitted.append(("generate", c.slug)))
+
+    resp = client.post("/api/cycleways", json={"q": "Landshut"})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == "pending"
+    assert body["cached"] is False
+    assert body["slug"] == "landshut"
+    assert body["bbox"] == [53.4, 9.7, 53.7, 10.3]
+    assert submitted == [("cycle", "landshut")]
+
+
+def test_post_cycleways_ready_skips_overpass_job(api, monkeypatch):
+    client, app_mod, cities, _ = api
+    ctx = _ctx("freising", "Freising", cities / "freising")
+    _schema2(cities / "freising")
+    monkeypatch.setattr(app_mod, "resolve_city", lambda _q: ctx)
+    submitted = []
+    monkeypatch.setattr(app_mod, "_submit_cycleways", lambda c: submitted.append(c.slug))
+    monkeypatch.setattr(app_mod, "_submit_generate", lambda c: submitted.append(f"generate:{c.slug}"))
+
+    resp = client.post("/api/cycleways", json={"q": "Freising"})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == "ready"
+    assert body["cached"] is True
+    assert body["message"] == "Radwege aus dem Cache"
+    assert submitted == []
+
+
+def test_suggest_endpoint(api, monkeypatch):
+    client, app_mod, _, _ = api
+    monkeypatch.setattr(
+        app_mod,
+        "photon_suggestions",
+        lambda q, limit=8: [{"name": "Köln", "state": "Nordrhein-Westfalen", "type": "city", "label": "Köln, Nordrhein-Westfalen"}]
+        if q == "Köl"
+        else [],
+    )
+    resp = client.get("/api/suggest", params={"q": "Köl"})
+    assert resp.status_code == 200
+    rows = resp.json()["suggestions"]
+    assert rows[0]["name"] == "Köln"
+    assert rows[0]["state"] == "Nordrhein-Westfalen"
+    assert client.get("/api/suggest", params={"q": "x"}).json() == {"suggestions": []}

@@ -5,8 +5,11 @@ Endpoints
 GET  /api/cities            -> list already-generated (cached) cities
 POST /api/generate {q}      -> geocode + (re)use cache or start a background job
 GET  /api/status/{slug}     -> job/cache status for polling
+GET  /api/suggest?q=        -> Photon suggestions, Germany only
+POST /api/cycleways {q}     -> Nominatim boundary + schema-2 cycle infra only
+GET  /api/cycleways/status/{slug} -> cycle-infra job status
 GET  /api/city/{slug}.geojson -> the generated hex GeoJSON
-GET  /api/city/{slug}/cycleways.geojson -> dedicated cycleway line overlay
+GET  /api/city/{slug}/cycleways.geojson -> schema-2 cycle infrastructure
 GET  /api/city/{slug}/stats   -> compact city-stats.json sidecar
 GET  /api/city/{slug}/hexes.parquet -> property table without geometry
 POST /api/destinations/matrix -> per-hex travel minutes to custom destinations
@@ -19,7 +22,9 @@ worker pool; results are written to data/cities/<slug>/ and persisted in SQLite
 
 from __future__ import annotations
 
+import json
 import os
+import threading
 import traceback
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -34,9 +39,11 @@ from pipeline.cache_status import has_factor_cache, is_cache_current
 from pipeline.city import CityContext, load_meta, resolve_city
 from pipeline.common import log
 from pipeline.export import normalize_export
+from pipeline.ingest.cycle_infra import cycleways_cache_ready
 from pipeline.run import STEPS, generate_city
 from server import db, jobs
 from server.destinations import load_or_compute
+from server.suggest import photon_suggestions
 
 TOTAL_STEPS = len(STEPS)
 
@@ -67,6 +74,10 @@ app.add_middleware(
 
 
 class GenerateRequest(BaseModel):
+    q: str
+
+
+class CyclewaysRequest(BaseModel):
     q: str
 
 
@@ -117,6 +128,81 @@ def _submit_normalize(ctx: CityContext) -> None:
         return _persist_city(slug) or _cached_meta(slug) or {**ctx.to_meta()}
 
     jobs.submit(slug, work, TOTAL_STEPS)
+
+
+def _cycle_job_id(slug: str) -> str:
+    """Job key separate from Wohnindex generation for the same city."""
+    return f"cycleways:{slug}"
+
+
+_cycle_guard = threading.Lock()
+
+
+def _cycleways_context(slug: str) -> CityContext | None:
+    """Bbox for a refresh: schema meta, Wohnindex meta.json, or the DB row."""
+    city_dir = _city_dir(slug)
+    metas: list[dict] = []
+    for path in (city_dir / config.CYCLEWAYS_META_FILE, city_dir / "meta.json"):
+        if not path.is_file():
+            continue
+        try:
+            metas.append(json.loads(path.read_text(encoding="utf-8")))
+        except (OSError, json.JSONDecodeError):
+            continue
+    db_meta = db.get_city_meta(slug)
+    if db_meta:
+        metas.append(db_meta)
+    for meta in metas:
+        bbox = meta.get("bbox")
+        if not isinstance(bbox, (list, tuple)) or len(bbox) < 4:
+            continue
+        center = meta.get("center")
+        if not isinstance(center, (list, tuple)) or len(center) < 2:
+            center = ((float(bbox[0]) + float(bbox[2])) / 2, (float(bbox[1]) + float(bbox[3])) / 2)
+        return CityContext(
+            slug=slug,
+            name=str(meta.get("name") or slug),
+            center=(float(center[0]), float(center[1])),
+            bbox=(float(bbox[0]), float(bbox[1]), float(bbox[2]), float(bbox[3])),
+            base_dir=city_dir,
+        )
+    return None
+
+
+def _submit_cycleways(ctx: CityContext) -> None:
+    """Queue one Overpass fetch for cycle infrastructure. Never ``generate_city``."""
+    job_id = _cycle_job_id(ctx.slug)
+    with _cycle_guard:
+        if jobs.is_running(job_id):
+            return
+        snap = jobs.snapshot(job_id)
+        if snap and snap.get("status") == "pending":
+            return
+        jobs.mark_queued(job_id, 1, message="Radwege werden geladen …")
+
+        def work() -> dict:
+            from pipeline.ingest.cycle_infra import fetch_and_store_cycle_infra
+
+            jobs.mark_progress(job_id, 0, 1, "Radwege werden geladen …")
+            return fetch_and_store_cycle_infra(ctx)
+
+        jobs.submit(job_id, work, 1)
+
+
+def _cycleways_payload(ctx: CityContext, *, status: str, cached: bool, message: str, job: dict | None = None) -> dict:
+    body = {
+        "status": status,
+        "cached": cached,
+        "slug": ctx.slug,
+        "name": ctx.name,
+        "bbox": [ctx.bbox[0], ctx.bbox[1], ctx.bbox[2], ctx.bbox[3]],
+        "center": [ctx.center[0], ctx.center[1]],
+        "message": message,
+    }
+    if job:
+        body["step"] = job.get("step", 0)
+        body["total"] = job.get("total", 1)
+    return body
 
 
 def _submit_generate(ctx: CityContext) -> None:
@@ -231,12 +317,82 @@ def city_geojson(slug: str):
     raise HTTPException(status_code=404, detail="not generated")
 
 
+@app.get("/api/suggest")
+def suggest(q: str = "", limit: int = 8) -> dict:
+    try:
+        suggestions = photon_suggestions(q, limit=limit)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"suggest failed: {exc}") from exc
+    return {"suggestions": suggestions}
+
+
+@app.post("/api/cycleways")
+def post_cycleways(req: CyclewaysRequest) -> dict:
+    """Resolve the city and return its bbox. Fetch cycle infra only when needed."""
+    try:
+        ctx = resolve_city(req.q)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"geocoding failed: {exc}") from exc
+
+    if cycleways_cache_ready(ctx.base_dir):
+        log("cycleways", f"schema 2 cache hit {ctx.slug}")
+        return _cycleways_payload(ctx, status="ready", cached=True, message="Radwege aus dem Cache")
+
+    _submit_cycleways(ctx)
+    job = jobs.snapshot(_cycle_job_id(ctx.slug)) or {}
+    return _cycleways_payload(
+        ctx,
+        status="pending",
+        cached=False,
+        message=str(job.get("message") or "Radwege werden geladen …"),
+        job=job,
+    )
+
+
+@app.get("/api/cycleways/status/{slug}")
+def cycleways_status(slug: str) -> dict:
+    city_dir = _city_dir(slug)
+    if cycleways_cache_ready(city_dir):
+        try:
+            meta = json.loads((city_dir / config.CYCLEWAYS_META_FILE).read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            meta = {}
+        return {
+            "status": "ready",
+            "cached": True,
+            "slug": slug,
+            "name": meta.get("name") or slug,
+            "bbox": meta.get("bbox"),
+            "center": meta.get("center"),
+            "message": "Radwege aus dem Cache",
+            "counts": meta.get("counts") or {},
+        }
+    job = jobs.snapshot(_cycle_job_id(slug))
+    if job is None:
+        raise HTTPException(status_code=404, detail="unknown cycleway city")
+    return {
+        "status": job.get("status"),
+        "cached": False,
+        "slug": slug,
+        "message": job.get("message") or "",
+        "step": job.get("step", 0),
+        "total": job.get("total", 1),
+    }
+
+
 @app.get("/api/city/{slug}/cycleways.geojson")
 def city_cycleways(slug: str):
-    path = _city_dir(slug) / config.CYCLEWAYS_GEOJSON_FILE
-    if path.exists():
-        return FileResponse(path, media_type="application/geo+json")
-    raise HTTPException(status_code=404, detail="not generated")
+    city_dir = _city_dir(slug)
+    if cycleways_cache_ready(city_dir):
+        return FileResponse(city_dir / config.CYCLEWAYS_GEOJSON_FILE, media_type="application/geo+json")
+    ctx = _cycleways_context(slug)
+    if ctx is not None:
+        _submit_cycleways(ctx)
+    raise HTTPException(status_code=404, detail="cycleways cache is not current")
 
 
 @app.get("/api/city/{slug}/stats")

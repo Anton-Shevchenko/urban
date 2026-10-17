@@ -12,9 +12,6 @@ export const VOI_LINE_ID = 'hexes-voi';
 export const SELECT_ID = 'hexes-selected';
 export const CHAT_ID = 'hexes-chat';
 export const SOURCE_ID = 'hexes';
-export const CYCLEWAY_SOURCE_ID = 'cycleways';
-export const CYCLEWAY_CASING_ID = 'cycleways-casing';
-export const CYCLEWAY_LAYER_ID = 'cycleways-line';
 
 export function firstSymbolLayerId(map: MapLibreMap): string | undefined {
   const sym = (map.getStyle().layers || []).find((l) => l.type === 'symbol');
@@ -137,30 +134,3 @@ export function chatLayer(): LineLayerSpecification {
   };
 }
 
-export function cyclewayCasingLayer(): LineLayerSpecification {
-  return {
-    id: CYCLEWAY_CASING_ID,
-    type: 'line',
-    source: CYCLEWAY_SOURCE_ID,
-    layout: { 'line-cap': 'round', 'line-join': 'round', visibility: 'none' },
-    paint: {
-      'line-color': '#064e3b',
-      'line-width': ['interpolate', ['linear'], ['zoom'], 10, 2.4, 13, 4.2, 16, 7.5],
-      'line-opacity': 0.9,
-    },
-  };
-}
-
-export function cyclewayLineLayer(): LineLayerSpecification {
-  return {
-    id: CYCLEWAY_LAYER_ID,
-    type: 'line',
-    source: CYCLEWAY_SOURCE_ID,
-    layout: { 'line-cap': 'round', 'line-join': 'round', visibility: 'none' },
-    paint: {
-      'line-color': '#10b981',
-      'line-width': ['interpolate', ['linear'], ['zoom'], 10, 1.3, 13, 2.6, 16, 4.8],
-      'line-opacity': 0.95,
-    },
-  };
-}

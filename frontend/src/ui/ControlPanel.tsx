@@ -40,7 +40,7 @@ export function ControlPanel({ onClose }: Props) {
 
   const legendNote = useMemo(() => {
     if (mapView === 'cycleways') {
-      return 'Radwege · nur baulich getrennt (highway=cycleway, cycleway=track) · kein Radfahrstreifen · OpenStreetMap-Linien, keine Hex-Füllung';
+      return 'Radwege · sechs OSM-Klassen · Farben und Filter in der Kartenlegende · Linien ohne Hexagon-Füllung';
     }
     if (mapView === 'price') {
       return 'Kaltmiete · nur beobachtete Nettokaltmiete · stadtrelativ, günstig = hoch · grau = keine Beobachtung · keine Schätzung';
@@ -195,11 +195,9 @@ export function ControlPanel({ onClose }: Props) {
             ))}
           </select>
         </label>
-        <div className={`legend-bar${streetOverlay ? ' is-cycleways' : ''}`} id="legend-bar" />
+        {streetOverlay ? null : <div className="legend-bar" id="legend-bar" />}
         {streetOverlay ? (
-          <div className="legend-scale">
-            <span>Getrennte Radwege</span>
-          </div>
+          <p className="section-hint">Legende auf der Karte: jeder Typ lässt sich ein- und ausblenden.</p>
         ) : rentFill ? (
           <div className="legend-scale">
             <span>0 teuer</span>

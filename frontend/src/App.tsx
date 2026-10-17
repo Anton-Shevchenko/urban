@@ -1,9 +1,10 @@
 import { BrowserRouter, Link, Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom';
 import { useCallback } from 'react';
-import { CompareSessionProvider, WohnIndexProvider, useCityData, usePaint } from './wohnindex';
+import { CompareSessionProvider, WohnIndexProvider, useCityData, useMapViewState, usePaint } from './wohnindex';
 import { useTheme, type ThemeMode } from './hooks/useTheme';
 import { usePanelOpen } from './hooks/usePanelOpen';
 import { MapView } from './map/MapView';
+import { CFG } from './scoring/constants';
 import { ControlPanel } from './ui/ControlPanel';
 import { ComparePanel } from './ui/ComparePanel';
 import { ChatPanel } from './ui/ChatPanel';
@@ -28,6 +29,9 @@ function MapAppShell({
 }) {
   const { cityName, loading, loadError } = useCityData();
   const { painting } = usePaint();
+  const { mapView, paintMapView } = useMapViewState();
+  const cyclewaysOn = mapView === 'cycleways' || paintMapView === 'cycleways';
+  const activeStyleUrl = cyclewaysOn ? CFG.styleUrl : mapStyleUrl;
 
   return (
     <>
@@ -41,7 +45,7 @@ function MapAppShell({
           </Link>
         }
       />
-      <MapView mapStyleUrl={mapStyleUrl} />
+      <MapView mapStyleUrl={activeStyleUrl} />
       {panelOpen ? (
         <ControlPanel onClose={togglePanel} />
       ) : (

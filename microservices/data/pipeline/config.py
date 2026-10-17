@@ -412,7 +412,11 @@ WALKING_QUALITY_FILE = "factor_walking_quality.parquet"
 URBAN_FORM_FILE = "factor_urban_form.parquet"
 CYCLEWAYS_FILE = "factor_cycleways.parquet"
 OSM_CYCLEWAYS_FILE = "osm_cycleways.parquet"
+# Map layer only. The score keeps reading OSM_CYCLEWAYS_FILE.
+OSM_CYCLE_INFRA_FILE = "osm_cycle_infra.parquet"
 CYCLEWAYS_GEOJSON_FILE = "cycleways.geojson"
+CYCLEWAYS_META_FILE = "cycleways.meta.json"
+CYCLEWAYS_SCHEMA_VERSION = 2
 OSM_DAILY_NEEDS_FILE = "osm_daily_needs.parquet"
 OSM_BUILDINGS_FILE = "osm_buildings.parquet"
 OSM_LANDUSE_FILE = "osm_landuse.parquet"
