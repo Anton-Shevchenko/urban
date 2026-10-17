@@ -55,15 +55,14 @@ def clamp(v: float, lo: float = 0.0, hi: float = 100.0) -> float:
     return max(lo, min(hi, v))
 
 
-# Each objective pillar and the exported properties it may be read from, most
-# specific first. Aliases exist because older exports used the legacy names.
+# Canonical export property for each objective pillar (schema ≥ 17).
 _PILLAR_SOURCES: dict[str, tuple[str, ...]] = {
-    "daily_life": ("s_daily_life", "s_daily_needs"),
-    "walk": ("s_walk", "s_walking_quality"),
+    "daily_life": ("s_daily_life",),
+    "walk": ("s_walk",),
     "green": ("s_green",),
-    "transit": ("s_transit", "s_transit_service"),
-    "quiet": ("s_quiet", "s_noise"),
-    "housing_affordability": ("s_housing_affordability", "s_housing_value", "s_rent_absolute"),
+    "transit": ("s_transit",),
+    "quiet": ("s_quiet",),
+    "housing_affordability": ("s_housing_affordability",),
 }
 
 

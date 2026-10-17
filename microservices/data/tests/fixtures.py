@@ -181,7 +181,6 @@ def build_fixture_city(tmp_path: Path, slug: str = "testkirchen") -> CityContext
     pd.DataFrame(
         {
             "h3_index": h3,
-            "walking_quality_score": ramp(28, 91),
             "walking_quality_raw": ramp(28, 91),
             "intersection_density": ramp(20, 140),
             "mean_block_length_m": ramp(60, 320),

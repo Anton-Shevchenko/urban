@@ -18,6 +18,11 @@ var ObjectiveWeights = map[string]float64{
 	"housing_affordability": 0.0,
 }
 
+// WeightedPillarKeys are objective pillars with weight > 0.
+var WeightedPillarKeys = []string{
+	"daily_life",
+}
+
 // DeclaredHexProperties lists every property the pipeline may export.
 var DeclaredHexProperties = []string{
 	"h3",
@@ -26,13 +31,11 @@ var DeclaredHexProperties = []string{
 	"s_daily_life",
 	"s_daily_needs",
 	"s_walk",
-	"s_walking_quality",
 	"s_transit",
 	"s_transit_service",
 	"s_green",
 	"s_green_strict",
 	"s_quiet",
-	"s_noise",
 	"s_housing_affordability",
 	"s_housing_value",
 	"s_urban_form",
@@ -140,7 +143,6 @@ var RequiredHexProperties = []string{
 	"s_living",
 	"s_daily_life",
 	"s_walk",
-	"s_walking_quality",
 	"s_transit",
 	"s_green",
 	"s_quiet",
@@ -150,7 +152,6 @@ var RequiredHexProperties = []string{
 	"s_urban_activity",
 	"s_business",
 	"s_transport",
-	"s_noise",
 	"center_min",
 	"urban_activity",
 	"business_count",

@@ -235,8 +235,6 @@ def fair_rent_score(df: pd.DataFrame, *, city_type: str) -> pd.Series:
     living = _col(df, "s_living", 50.0).clip(0, 100)
     center = _col(df, "s_center", 50.0).clip(0, 100)
     walk = _col(df, "s_walk", 50.0).clip(0, 100)
-    if float(walk.max() - walk.min()) < 1 and "s_walking_quality" in df.columns:
-        walk = _col(df, "s_walking_quality", 50.0).clip(0, 100)
     transit = _col(df, "s_transit", 50.0).clip(0, 100)
     daily = _col(df, "s_daily_life", 50.0).clip(0, 100)
     green = _col(df, "s_green", 50.0).clip(0, 100)

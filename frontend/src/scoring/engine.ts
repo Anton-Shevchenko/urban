@@ -63,12 +63,10 @@ export {
   WALK_MINUTE_BAND_X,
   WALK_MINUTE_BAND_Y,
   clamp100,
-  dailyLifeFromGroups,
   deriveUrbanForm,
   deriveWalkingQuality,
   extractGroupMultipliers,
   extractPillarWeights,
-  hasCustomGroupMultipliers,
   isUrbanFormBroken,
   livingScore,
   locationScore,
@@ -575,7 +573,7 @@ export function createContextFromFeatures(
     .map((p) => num(p.noise_db))
     .filter((v): v is number => v != null);
   const noiseScores = propsList
-    .map((p) => num(p.s_noise))
+    .map((p) => num(p.s_quiet))
     .filter((v): v is number => v != null);
   const noiseSpread =
     noiseDbs.length >= 2

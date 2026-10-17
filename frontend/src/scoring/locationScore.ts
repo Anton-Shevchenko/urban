@@ -11,7 +11,6 @@ import {
   buildDiagnostics,
   computeObjectivePillars,
   computeObjectiveScore,
-  dailyLifeFromGroups,
 } from './objective';
 import type {
   LocationScoreResult,
@@ -60,13 +59,9 @@ export function computePersonalMatchScore(
 ): { score: number | null; coverage: number } {
   const focus = Math.max(0, Math.min(1, Number(options.affordabilityFocus) || 0));
   const weights = { ...pillarWeights };
+  void options.groupMultipliers;
 
-  // When group multipliers present, recompute daily_life with personal weights.
-  let dailyLife = pillars.daily_life;
-  if (options.groupMultipliers && Object.keys(options.groupMultipliers).length) {
-    const dl = dailyLifeFromGroups(p, options.groupMultipliers);
-    dailyLife = dl.score;
-  }
+  const dailyLife = pillars.daily_life;
 
   // Personal affordability: blend housing toward city-relative cheapness when focused.
   let housing = pillars.housing_affordability;
@@ -125,7 +120,7 @@ export function locationScore(
   const focus = options.affordabilityFocus ?? 0;
 
   const bundle = computeObjectivePillars(p, null);
-  // Always recompute from OBJECTIVE_WEIGHTS (infra-only ≡ daily_life).
+  // Always weight OBJECTIVE_WEIGHTS (pillars with weight > 0).
   // Do not prefer stale pipeline s_objective / s_living composites.
   const { objectiveScore, confidence, weightedContributions } = computeObjectiveScore(bundle);
 

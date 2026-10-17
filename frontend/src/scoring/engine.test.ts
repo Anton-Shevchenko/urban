@@ -63,7 +63,10 @@ describe('objective-v2 Living Score', () => {
     expect(sum).toBeCloseTo(1, 5);
     expect(OBJECTIVE_WEIGHTS).not.toHaveProperty('centrality');
     expect(OBJECTIVE_WEIGHTS.daily_life).toBe(1);
-    expect(PILLAR_KEYS).toEqual(['daily_life']);
+    expect(PILLAR_KEYS).toEqual(
+      (Object.keys(OBJECTIVE_WEIGHTS) as (keyof typeof OBJECTIVE_WEIGHTS)[])
+        .filter((key) => OBJECTIVE_WEIGHTS[key] > 0),
+    );
   });
 
   it('computes objective score for Munich hexes', () => {

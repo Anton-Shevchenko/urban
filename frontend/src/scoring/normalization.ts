@@ -24,52 +24,12 @@ export type NormalizationScale = {
 };
 
 export const OBJECTIVE_NORMALIZATION = {
-  supermarket_walk_minutes: {
-    name: 'Supermarket walk time',
-    unit: 'minutes',
-    direction: 'lower',
-    bands: [[0, 100], [5, 100], [10, 70], [15, 30], [20, 0]],
-    source: '15-minute city walk bands',
-    version: 'v2',
-  },
-  cafe_walk_minutes: {
-    name: 'Cafe walk time',
-    unit: 'minutes',
-    direction: 'lower',
-    bands: [[0, 100], [10, 100], [15, 70], [25, 30], [35, 0]],
-    source: 'Category-specific accessibility',
-    version: 'v2',
-  },
-  transit_stop_walk_minutes: {
-    name: 'Transit stop walk time',
-    unit: 'minutes',
-    direction: 'lower',
-    bands: [[0, 100], [5, 100], [10, 75], [15, 40], [25, 0]],
-    source: 'PT accessibility bands',
-    version: 'v2',
-  },
-  transit_frequency: {
-    name: 'Transit service score',
-    unit: 'score 0–100',
-    direction: 'higher',
-    bands: [[0, 0], [25, 25], [50, 50], [75, 75], [100, 100]],
-    source: 'Pipeline transit_service_raw / score (absolute)',
-    version: 'v2',
-  },
   noise_db: {
     name: 'Ambient noise',
     unit: 'dB',
     direction: 'lower',
     bands: [[45, 100], [52, 85], [58, 65], [62, 45], [68, 25], [75, 10], [85, 0]],
     source: 'Absolute urban noise quiet curve',
-    version: 'v2',
-  },
-  park_walk_minutes: {
-    name: 'Park walk time',
-    unit: 'minutes',
-    direction: 'lower',
-    bands: [[0, 100], [5, 100], [10, 80], [15, 50], [25, 15], [40, 0]],
-    source: 'Green accessibility',
     version: 'v2',
   },
   park_dist_m: {
@@ -145,9 +105,6 @@ export const LEGEND_BANDS = [
   { min: 40, max: 54, label: 'Below average' },
   { min: 0, max: 39, label: 'Poor' },
 ] as const;
-
-export const NEAREST_WEIGHT = 0.75;
-export const CHOICE_WEIGHT = 0.25;
 
 /** Piecewise linear interpolate from sorted [x,y] bands. */
 export function bandScore(

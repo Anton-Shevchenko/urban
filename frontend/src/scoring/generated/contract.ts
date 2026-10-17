@@ -30,6 +30,11 @@ export const OBJECTIVE_WEIGHTS: Record<ObjectivePillarKey, number> = {
   housing_affordability: 0,
 };
 
+/** Objective pillars with weight > 0. UI and the active score read this, not a hardcoded list. */
+export const WEIGHTED_PILLAR_KEYS: ObjectivePillarKey[] = [
+  'daily_life',
+];
+
 /** Legacy pillar names still emitted by the pipeline. */
 export const OBJECTIVE_WEIGHT_ALIASES: Record<string, ObjectivePillarKey> = {
   walking_quality: 'walk',
@@ -50,10 +55,6 @@ export const DAILY_LIFE_GROUP_WEIGHTS: Record<string, number> = {
   services: 0.15,
   restaurants_cafes: 0.1,
   leisure: 0.1,
-};
-
-export const DAILY_LIFE_GROUP_ALIASES: Record<string, string> = {
-  other: 'leisure',
 };
 
 export const DAILY_LIFE_CATEGORY_WEIGHTS: Record<string, Record<string, number>> = {
@@ -81,16 +82,12 @@ export type HexProperties = {
   /** Legacy alias of s_daily_life */
   s_daily_needs?: number | null;
   s_walk?: number | null;
-  /** Legacy alias of s_walk */
-  s_walking_quality?: number | null;
   s_transit?: number | null;
   /** Legacy alias of s_transit */
   s_transit_service?: number | null;
   s_green?: number | null;
   s_green_strict?: number | null;
   s_quiet?: number | null;
-  /** Quiet-is-high alias of s_quiet */
-  s_noise?: number | null;
   s_housing_affordability?: number | null;
   /** Alias of s_housing_affordability */
   s_housing_value?: number | null;
@@ -214,13 +211,11 @@ export const DECLARED_HEX_PROPERTIES: string[] = [
   's_daily_life',
   's_daily_needs',
   's_walk',
-  's_walking_quality',
   's_transit',
   's_transit_service',
   's_green',
   's_green_strict',
   's_quiet',
-  's_noise',
   's_housing_affordability',
   's_housing_value',
   's_urban_form',
@@ -327,7 +322,6 @@ export const REQUIRED_HEX_PROPERTIES: string[] = [
   's_living',
   's_daily_life',
   's_walk',
-  's_walking_quality',
   's_transit',
   's_green',
   's_quiet',
@@ -337,7 +331,6 @@ export const REQUIRED_HEX_PROPERTIES: string[] = [
   's_urban_activity',
   's_business',
   's_transport',
-  's_noise',
   'center_min',
   'urban_activity',
   'business_count',
@@ -354,13 +347,11 @@ export const FRONTEND_HEX_PROPERTIES: string[] = [
   's_daily_life',
   's_daily_needs',
   's_walk',
-  's_walking_quality',
   's_transit',
   's_transit_service',
   's_green',
   's_green_strict',
   's_quiet',
-  's_noise',
   's_housing_affordability',
   's_housing_value',
   's_urban_form',
