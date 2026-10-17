@@ -1,8 +1,14 @@
 import { useCallback, useRef, useState } from 'react';
 import { isAbortError, pollCycleways, requestCycleways } from '../api/client';
 
+export function cityNameFromQuery(query: string): string {
+  const head = query.split(',')[0]?.trim() ?? '';
+  return head || query.trim();
+}
+
 export function useCyclewaySearch(setMapView: (view: string) => void) {
   const [slug, setSlug] = useState<string | null>(null);
+  const [name, setName] = useState<string | null>(null);
   const [holding, setHolding] = useState(false);
   const [bbox, setBbox] = useState<[number, number, number, number] | null>(null);
   const [statusText, setStatusText] = useState<string | null>(null);
@@ -18,12 +24,14 @@ export function useCyclewaySearch(setMapView: (view: string) => void) {
     setError(false);
     setHolding(true);
     setSlug(null);
+    setName(cityNameFromQuery(q));
     setStatusText('Stadt wird gesucht …');
     setMapView('cycleways');
     try {
       const res = await requestCycleways(q);
       if (seqRef.current !== seq) return;
       setSlug(res.slug);
+      if (res.name?.trim()) setName(res.name.trim());
       setHolding(false);
       if (res.bbox && res.bbox.length === 4) {
         setBbox([res.bbox[0], res.bbox[1], res.bbox[2], res.bbox[3]]);
@@ -48,5 +56,7 @@ export function useCyclewaySearch(setMapView: (view: string) => void) {
     }
   }, [setMapView]);
 
-  return { slug, holding, bbox, statusText, error, busy, openCity };
+  return { slug, name, holding, bbox, statusText, error, busy, openCity };
 }
+
+export type CyclewaySearchState = ReturnType<typeof useCyclewaySearch>;

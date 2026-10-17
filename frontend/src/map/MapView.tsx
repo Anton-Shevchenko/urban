@@ -20,18 +20,19 @@ import { LAYER_ID } from './layerConfig';
 import { MapSearch } from './MapSearch';
 import { queryHexAtPoint, resolveQueriedHex } from './queryHex';
 import { useCyclewayOverlay } from './useCyclewayOverlay';
-import { useCyclewaySearch } from './useCyclewaySearch';
+import type { CyclewaySearchState } from './useCyclewaySearch';
 import { useHexPaint } from './useHexPaint';
 
 type Props = {
   mapStyleUrl: string;
+  cyclewaySearch: CyclewaySearchState;
 };
 
 // Module-level so Vite HMR re-evaluates it and the map is recreated instead of
 // keeping a MapLibre instance that still has Shift-gated click / box-zoom.
 const MAP_GENERATION = Date.now();
 
-export function MapView({ mapStyleUrl }: Props) {
+export function MapView({ mapStyleUrl, cyclewaySearch }: Props) {
   const city = useCityData();
   const dest = useDestinations();
   const compare = useCompare();
@@ -87,7 +88,6 @@ export function MapView({ mapStyleUrl }: Props) {
   chatRef.current = chat;
 
   const cyclewaysVisible = mapView.mapView === 'cycleways';
-  const cyclewaySearch = useCyclewaySearch(mapView.setMapView);
   const [enabledKinds, setEnabledKinds] = useState(() => CYCLEWAY_LEGEND.map((entry) => entry.kind));
   const cycleLockRef = useRef(false);
   const mapViewRef = useRef(mapView.mapView);

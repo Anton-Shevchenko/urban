@@ -5,10 +5,12 @@ import { useCityData, useMapViewState, useWeights } from '../wohnindex';
 
 type Props = {
   onClose: () => void;
+  cityLabel: string;
+  hexSummary: string | null;
 };
 
-export function ControlPanel({ onClose }: Props) {
-  const { cityName, meta, features, hasRent, searchStatus, searching, runSearch } = useCityData();
+export function ControlPanel({ onClose, cityLabel, hexSummary }: Props) {
+  const { meta, features, hasRent, searchStatus, searching, runSearch } = useCityData();
   const {
     desiredAreaM2,
     setDesiredAreaM2,
@@ -73,7 +75,7 @@ export function ControlPanel({ onClose }: Props) {
     <aside id="panel" aria-label="Steuerung">
       <header className="panel-head">
         <div className="panel-head-text">
-          <h1>{cityName}</h1>
+          <h1>{cityLabel}</h1>
           <p className="subtitle">
             Infrastruktur · Läden, Cafés, Services · 0–100
             {cityType ? ` · ${cityType}` : ''}
@@ -213,9 +215,7 @@ export function ControlPanel({ onClose }: Props) {
       </section>
 
       <footer className="panel-foot">
-        <span>
-          {meta.count ?? features.length} Hexagone · H3 res {meta.h3_res ?? '?'}
-        </span>
+        {hexSummary ? <span id="hex-count">{hexSummary}</span> : null}
         <nav>
           <a href="/legal/impressum.html">Impressum</a> ·{' '}
           <a href="/legal/datenschutz.html">Datenschutz</a>
