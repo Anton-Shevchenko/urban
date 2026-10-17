@@ -144,9 +144,9 @@ export function cyclewayCasingLayer(): LineLayerSpecification {
     source: CYCLEWAY_SOURCE_ID,
     layout: { 'line-cap': 'round', 'line-join': 'round', visibility: 'none' },
     paint: {
-      'line-color': '#064e3b',
-      'line-width': ['interpolate', ['linear'], ['zoom'], 10, 2.4, 13, 4.2, 16, 7.5],
-      'line-opacity': 0.9,
+      'line-color': '#f8fafc',
+      'line-width': ['interpolate', ['linear'], ['zoom'], 10, 4.2, 13, 8, 16, 14],
+      'line-opacity': 1,
     },
   };
 }
@@ -158,9 +158,16 @@ export function cyclewayLineLayer(): LineLayerSpecification {
     source: CYCLEWAY_SOURCE_ID,
     layout: { 'line-cap': 'round', 'line-join': 'round', visibility: 'none' },
     paint: {
-      'line-color': '#10b981',
-      'line-width': ['interpolate', ['linear'], ['zoom'], 10, 1.3, 13, 2.6, 16, 4.8],
-      'line-opacity': 0.95,
+      'line-color': [
+        'match',
+        ['get', 'kind'],
+        'cycleway', '#059669',
+        'track', '#2563eb',
+        'segregated_path', '#d97706',
+        '#059669',
+      ],
+      'line-width': ['interpolate', ['linear'], ['zoom'], 10, 2.2, 13, 4.4, 16, 7.5],
+      'line-opacity': 1,
     },
   };
 }

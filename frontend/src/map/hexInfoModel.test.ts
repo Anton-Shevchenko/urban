@@ -95,12 +95,14 @@ describe('buildHexInfoModel', () => {
     expect(info.walks.find((w) => w.key === 'dn_supermarket_min')?.inHex).toBe(0);
     expect(info.walks.find((w) => w.key === 'dn_kita_min')?.inHex).toBe(2);
     expect(info.walks.find((w) => w.key === 'dn_school_min')?.minutes).toBeNull();
+    expect(info.rentEurM2).toBe(18.5);
     expect(info.priceLines.some((line) => line.startsWith('Kaltmiete:'))).toBe(true);
     expect(countOrNull(2.4)).toBe(2);
   });
 
   it('hides a price that was not published', () => {
     const info = buildHexInfoModel({ ...props, rent_eur_m2: null }, 'München');
+    expect(info.rentEurM2).toBeNull();
     expect(info.priceLines).toEqual([]);
   });
 

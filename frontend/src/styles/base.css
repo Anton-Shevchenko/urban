@@ -9,6 +9,76 @@ html, body {
   background: var(--bg);
 }
 
+#root { height: 100%; }
+
+button, input, select, textarea {
+  font-family: inherit;
+}
+
+html { scroll-behavior: smooth; }
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+}
+
+::selection {
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.skip-link {
+  position: absolute;
+  left: 12px;
+  top: -48px;
+  z-index: 40;
+  padding: 8px 12px;
+  background: var(--ink);
+  color: var(--bg);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.skip-link:focus {
+  top: 12px;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.brand:hover .brand-word { color: var(--accent); }
+
+.brand-word {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+
+.brand-mark {
+  flex-shrink: 0;
+  color: var(--ink);
+}
+
+.brand-mark-inner { color: var(--accent); }
+
+.mono {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  font-variant-numeric: tabular-nums;
+}
+
 /* --- top bar ------------------------------------------------------------- */
 .topbar {
   position: absolute;
@@ -20,19 +90,22 @@ html, body {
   display: flex;
   align-items: center;
   gap: var(--space-4);
-  padding: 0 14px;
-  background: var(--panel);
-  backdrop-filter: blur(10px);
+  padding: 0 16px;
+  background: var(--panel-solid);
   border-bottom: 1px solid var(--line);
-  box-shadow: var(--shadow);
 }
 
 .topbar-brand {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 10px;
   min-width: 0;
-  flex-shrink: 0;
+  flex-shrink: 1;
+}
+
+.topbar-sep {
+  color: var(--line);
+  font-weight: 600;
 }
 
 .topbar-product {
@@ -52,11 +125,12 @@ html, body {
 
 .topbar-city {
   font-size: 13px;
+  font-weight: 600;
   color: var(--muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 160px;
+  max-width: 180px;
 }
 
 .topbar-nav {
@@ -86,9 +160,14 @@ html, body {
   transition: border-color 0.15s, background 0.15s;
 }
 
-.topbar-btn:hover {
+.topbar-btn:hover:not(:disabled) {
   border-color: var(--accent);
   background: var(--accent-hover);
+}
+
+.topbar-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 
 .topbar-btn[aria-pressed="true"] {
@@ -192,7 +271,7 @@ html, body {
 .loading {
   position: absolute;
   top: calc(var(--topbar-h) + 12px);
-  right: 16px;
+  right: calc(var(--right-dock, 0px) + 16px);
   z-index: 6;
   background: var(--panel);
   padding: 10px 14px;
@@ -226,16 +305,25 @@ html, body {
 
 
 /* --- responsive ---------------------------------------------------------- */
-@media (max-width: 560px) {
-  .topbar-city { max-width: 96px; }
-  .topbar-btn { padding: 6px 8px; font-size: 11px; }
+@media (max-width: 720px) {
+  .topbar-city { max-width: 88px; }
+  .brand-word { font-size: 14px; }
+
+  .map-shell:has(#panel),
+  .map-shell:has(#compare-panel) {
+    --left-dock: 0px;
+    --right-dock: 0px;
+  }
 
   #panel {
     top: auto;
     bottom: 0;
     left: 0;
     width: 100%;
-    max-height: 56vh;
+    height: min(58vh, 520px);
+    max-height: none;
+    border-right: 0;
+    border-top: 1px solid var(--line);
     border-radius: 16px 16px 0 0;
   }
 
@@ -244,12 +332,17 @@ html, body {
     bottom: 16px;
     left: 12px;
   }
-  #compare-panel {
-    top: calc(var(--topbar-h) + 8px);
-    right: 8px;
-    left: 8px;
-    width: auto;
-    max-height: 40vh;
+  #compare-panel:not(.is-home) {
+    top: var(--topbar-h);
+    right: 0;
+    left: 0;
+    bottom: auto;
+    width: 100%;
+    height: min(44vh, 380px);
+    max-height: none;
+    border-left: 0;
+    border-bottom: 1px solid var(--line);
+    border-radius: 0 0 16px 16px;
   }
   #compare-panel.is-home {
     position: relative;
@@ -257,15 +350,16 @@ html, body {
     left: auto;
     right: auto;
     width: calc(100% - 24px);
+    height: auto;
     max-height: none;
     margin: 20px auto;
   }
   #chat-panel {
-    right: 8px;
     left: 8px;
+    right: 8px;
     width: auto;
-    bottom: 8px;
-    max-height: 38vh;
+    bottom: 0;
+    max-height: min(42vh, 380px);
   }
   .chat-reopen {
     right: 8px;
@@ -287,7 +381,7 @@ html, body {
     max-height: 30vh;
   }
   .paint-loading {
-    bottom: calc(56vh + 8px);
+    bottom: calc(58vh + 8px);
     right: 8px;
   }
 }

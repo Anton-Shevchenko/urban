@@ -1,4 +1,4 @@
-import { BrowserRouter, Link, Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom';
 import { useCallback } from 'react';
 import { CompareSessionProvider, WohnIndexProvider, useCityData, usePaint } from './wohnindex';
 import { useTheme, type ThemeMode } from './hooks/useTheme';
@@ -9,6 +9,7 @@ import { ComparePanel } from './ui/ComparePanel';
 import { ChatPanel } from './ui/ChatPanel';
 import { DebugPanel } from './ui/DebugPanel';
 import { TopBar } from './ui/TopBar';
+import { Brand } from './ui/Brand';
 import { HomePage } from './ui/HomePage';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import './styles/index.css';
@@ -26,20 +27,20 @@ function MapAppShell({
   panelOpen: boolean;
   togglePanel: () => void;
 }) {
-  const { cityName, loading, loadError } = useCityData();
+  const { cityName, loading, loadError, searching, refreshCity } = useCityData();
   const { painting } = usePaint();
 
   return (
-    <>
+    <div className="map-shell">
       <TopBar
         cityName={cityName}
         theme={theme}
         onToggleTheme={toggleTheme}
-        brandSlot={
-          <Link to="/" className="topbar-product topbar-product-link">
-            Wohnindex
-          </Link>
-        }
+        brandSlot={<Brand />}
+        refreshing={searching || loading}
+        onRefresh={() => {
+          void refreshCity();
+        }}
       />
       <MapView mapStyleUrl={mapStyleUrl} />
       {panelOpen ? (
@@ -76,7 +77,7 @@ function MapAppShell({
           Karte wird aktualisiert …
         </div>
       )}
-    </>
+    </div>
   );
 }
 

@@ -212,6 +212,7 @@ export function MapView({ mapStyleUrl }: Props) {
     citySlug: city.citySlug,
     paintMapView: mapView.paintMapView ?? mapView.mapView,
     styleEpoch,
+    dataEpoch: city.dataEpoch,
   });
 
   useEffect(() => {

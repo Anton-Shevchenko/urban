@@ -22,7 +22,7 @@ import {
 import type { ScoringContext, ScoringEngine, ScoringMode } from '../scoring/types';
 import { CFG, PRESET_USES_PREFS, STORAGE } from '../scoring/constants';
 import { summarizeScores, type ScoreDistribution } from '../scoring/histogram';
-import { ensureApiBase, fetchDestMatrix, isAbortError } from '../api/client';
+import { ensureApiBase, fetchCityGeojson, fetchDestMatrix, isAbortError } from '../api/client';
 import { loadOrGenerateCity } from '../api/city';
 import {
   buildMapViewOptions,
@@ -59,6 +59,7 @@ export function useWohnIndexStore(options: UseWohnIndexOptions = {}) {
   const [meta, setMeta] = useState<CityMeta>({});
   const [cityName, setCityName] = useState('München');
   const [citySlug, setCitySlug] = useState('muenchen');
+  const [dataEpoch, setDataEpoch] = useState(0);
   const [hasRent, setHasRent] = useState(true);
   const [hasExtendedMetrics, setHasExtendedMetrics] = useState(true);
   const [heatHasVariation, setHeatHasVariation] = useState(true);
@@ -95,7 +96,7 @@ export function useWohnIndexStore(options: UseWohnIndexOptions = {}) {
     {},
   );
   const [chatHex, setChatHex] = useState<ChatHex | null>(null);
-  const [chatOpen, setChatOpen] = useState(true);
+  const [chatOpen, setChatOpen] = useState(false);
   const [mapView, setMapViewState] = useState(() => {
     try {
       const v = localStorage.getItem(STORAGE.mapView);
@@ -699,6 +700,32 @@ export function useWohnIndexStore(options: UseWohnIndexOptions = {}) {
     };
   }, [destinations, citySlug, features]);
 
+  const refreshCity = useCallback(async () => {
+    const slug = loadedSlugRef.current || citySlug;
+    if (!slug || searching) return;
+    const seq = ++cityLoadSeq.current;
+    setSearching(true);
+    setLoading(true);
+    setLoadError(null);
+    setSearchStatus({ msg: `Aktualisiere „${slug}“ …` });
+    try {
+      await ensureApiBase();
+      const geojson = await fetchCityGeojson(slug);
+      if (cityLoadSeq.current !== seq) return;
+      loadCity(geojson);
+      setDataEpoch((n) => n + 1);
+      setSearchStatus(null);
+    } catch (err) {
+      if (cityLoadSeq.current !== seq || isAbortError(err)) return;
+      const msg = err instanceof Error ? err.message : 'Daten konnten nicht aktualisiert werden';
+      setSearchStatus({ msg, error: true });
+      setLoadError(msg);
+      setLoading(false);
+    } finally {
+      if (cityLoadSeq.current === seq) setSearching(false);
+    }
+  }, [citySlug, searching, loadCity]);
+
   const runSearch = useCallback(
     async (query: string) => {
       if (!query.trim() || searching) return;
@@ -872,6 +899,7 @@ export function useWohnIndexStore(options: UseWohnIndexOptions = {}) {
     meta,
     cityName,
     citySlug,
+    dataEpoch,
     hasRent,
     hasExtendedMetrics,
     heatHasVariation,
@@ -923,6 +951,7 @@ export function useWohnIndexStore(options: UseWohnIndexOptions = {}) {
     factorAvailable,
     applyPreset,
     runSearch,
+    refreshCity,
     addDestination,
     IMPORTANCE_KEYS,
     PREF_KEYS,

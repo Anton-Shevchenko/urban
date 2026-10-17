@@ -9,7 +9,6 @@ import {
   CYCLEWAY_SOURCE_ID,
   cyclewayCasingLayer,
   cyclewayLineLayer,
-  firstSymbolLayerId,
 } from './layerConfig';
 
 const EMPTY: FeatureCollection = { type: 'FeatureCollection', features: [] };
@@ -25,19 +24,24 @@ function setCyclewayVisibility(map: MapLibreMap, visible: boolean): void {
   }
 }
 
+function raiseCycleways(map: MapLibreMap): void {
+  if (map.getLayer(CYCLEWAY_CASING_ID)) map.moveLayer(CYCLEWAY_CASING_ID);
+  if (map.getLayer(CYCLEWAY_LAYER_ID)) map.moveLayer(CYCLEWAY_LAYER_ID);
+}
+
 function applyCyclewayData(map: MapLibreMap, fc: FeatureCollection): void {
-  const before = firstSymbolLayerId(map);
   if (!map.getSource(CYCLEWAY_SOURCE_ID)) {
     map.addSource(CYCLEWAY_SOURCE_ID, { type: 'geojson', data: fc });
   } else {
     (map.getSource(CYCLEWAY_SOURCE_ID) as GeoJSONSource).setData(fc);
   }
   if (!map.getLayer(CYCLEWAY_CASING_ID)) {
-    map.addLayer(cyclewayCasingLayer(), before);
+    map.addLayer(cyclewayCasingLayer());
   }
   if (!map.getLayer(CYCLEWAY_LAYER_ID)) {
-    map.addLayer(cyclewayLineLayer(), before);
+    map.addLayer(cyclewayLineLayer());
   }
+  raiseCycleways(map);
 }
 
 export function useCyclewayOverlay(opts: {
@@ -45,9 +49,11 @@ export function useCyclewayOverlay(opts: {
   citySlug: string;
   paintMapView: string;
   styleEpoch: number;
+  dataEpoch: number;
 }): void {
-  const { mapRef, citySlug, paintMapView, styleEpoch } = opts;
+  const { mapRef, citySlug, paintMapView, styleEpoch, dataEpoch } = opts;
   const seqRef = useRef(0);
+  const seenEpochRef = useRef(0);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -71,6 +77,10 @@ export function useCyclewayOverlay(opts: {
       else current.once('load', run);
     };
 
+    if (dataEpoch !== seenEpochRef.current) {
+      cache.delete(citySlug);
+      seenEpochRef.current = dataEpoch;
+    }
     const cached = cache.get(citySlug);
     if (cached) {
       apply(cached);
@@ -90,5 +100,5 @@ export function useCyclewayOverlay(opts: {
     return () => {
       cancelled = true;
     };
-  }, [mapRef, citySlug, paintMapView, styleEpoch]);
+  }, [mapRef, citySlug, paintMapView, styleEpoch, dataEpoch]);
 }

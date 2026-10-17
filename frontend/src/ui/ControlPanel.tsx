@@ -40,7 +40,10 @@ export function ControlPanel({ onClose }: Props) {
 
   const legendNote = useMemo(() => {
     if (mapView === 'cycleways') {
-      return 'Radwege · nur baulich getrennt (highway=cycleway, cycleway=track) · kein Radfahrstreifen · OpenStreetMap-Linien, keine Hex-Füllung';
+      return 'Radwege · Grün: eigene Radwege · Blau: baulich getrennte Führung an der Fahrbahn · Orange: getrennte Geh- und Radwege · OpenStreetMap-Linien, keine Hex-Füllung';
+    }
+    if (mapView === 'walkability') {
+      return 'Walkability · Kreuzungsdichte, kurze Quartiere, Haltestellennähe, Nutzungsmix, Einwohnerdichte · Parks/Grün als Spazier-Floor · nicht Gehqualität';
     }
     if (mapView === 'price') {
       return 'Kaltmiete · nur beobachtete Nettokaltmiete · stadtrelativ, günstig = hoch · grau = keine Beobachtung · keine Schätzung';
@@ -68,6 +71,18 @@ export function ControlPanel({ onClose }: Props) {
   };
 
   const cityType = (meta as { city_type?: string }).city_type;
+  const cityTypeLabel =
+    cityType === 'METROPOLIS'
+      ? 'Metropole'
+      : cityType === 'LARGE_CITY'
+        ? 'Großstadt'
+        : cityType === 'MEDIUM_CITY'
+          ? 'Mittelstadt'
+          : cityType === 'SMALL_CITY'
+            ? 'Kleinstadt'
+            : cityType === 'TOWN'
+              ? 'Stadt'
+              : cityType;
 
   return (
     <aside id="panel" aria-label="Steuerung">
@@ -75,8 +90,8 @@ export function ControlPanel({ onClose }: Props) {
         <div className="panel-head-text">
           <h1>{cityName}</h1>
           <p className="subtitle">
-            Infrastruktur · Läden, Cafés, Services · 0–100
-            {cityType ? ` · ${cityType}` : ''}
+            Infrastruktur · Alltag in Gehweite · 0–100
+            {cityTypeLabel ? ` · ${cityTypeLabel}` : ''}
           </p>
         </div>
         <button
@@ -96,6 +111,7 @@ export function ControlPanel({ onClose }: Props) {
         </button>
       </header>
 
+      <div className="panel-scroll">
       <section className="search">
         <span className="section-label">Stadt suchen</span>
         <form className="search-form" role="search" onSubmit={onSearch}>
@@ -195,12 +211,16 @@ export function ControlPanel({ onClose }: Props) {
             ))}
           </select>
         </label>
-        <div className={`legend-bar${streetOverlay ? ' is-cycleways' : ''}`} id="legend-bar" />
         {streetOverlay ? (
-          <div className="legend-scale">
-            <span>Getrennte Radwege</span>
-          </div>
-        ) : rentFill ? (
+          <ul className="cycleway-legend">
+            <li><i className="swatch swatch-cycleway" /> Radweg</li>
+            <li><i className="swatch swatch-track" /> Getrennte Führung</li>
+            <li><i className="swatch swatch-path" /> Geh- und Radweg</li>
+          </ul>
+        ) : (
+          <div className="legend-bar" id="legend-bar" />
+        )}
+        {streetOverlay ? null : rentFill ? (
           <div className="legend-scale">
             <span>0 teuer</span>
             <span>100 günstig</span>
@@ -213,6 +233,7 @@ export function ControlPanel({ onClose }: Props) {
         )}
         <p className="section-hint legend-note">{legendNote}</p>
       </section>
+      </div>
 
       <footer className="panel-foot">
         <span>

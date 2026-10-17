@@ -22,7 +22,9 @@ export type CityDataSlice = {
   hasRent: boolean;
   searchStatus: { msg: string; error?: boolean } | null;
   searching: boolean;
+  dataEpoch: number;
   runSearch: (query: string) => Promise<void>;
+  refreshCity: () => Promise<void>;
 };
 
 export type WeightsSlice = {

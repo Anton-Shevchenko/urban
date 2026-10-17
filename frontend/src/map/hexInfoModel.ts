@@ -176,7 +176,10 @@ export function buildHexInfoModel(
     pillars: HEX_PILLAR_FACTS.map((row) => {
       const fromProps = firstNumber(props, row.props);
       const fromScore = result.pillars?.[row.scoreKey];
-      const val = fromProps ?? (fromScore == null || !Number.isFinite(Number(fromScore)) ? null : Number(fromScore));
+      // Live score first: Infrastruktur is recomputed from walk minutes, so the
+      // pillar cell matches the headline instead of a stale exported s_daily_life.
+      const live = fromScore == null || !Number.isFinite(Number(fromScore)) ? null : Number(fromScore);
+      const val = live ?? fromProps;
       return {
         key: row.key,
         label: PILLAR_LABELS[row.labelKey] || row.labelKey,

@@ -1,9 +1,34 @@
 /* Map canvas, MapLibre chrome, centre/destination markers. */
 
+.map-shell {
+  --left-dock: 0px;
+  --right-dock: 0px;
+  position: absolute;
+  inset: 0;
+}
+
+.map-shell:has(#panel) {
+  --left-dock: var(--sidebar-w);
+}
+
+.map-shell:has(#compare-panel) {
+  --right-dock: var(--dock-w);
+}
+
 #map { position: absolute; inset: 0; }
 
 .maplibregl-ctrl-top-right {
   top: calc(var(--topbar-h) + 8px);
+  right: calc(var(--right-dock) + 8px);
+}
+
+.maplibregl-ctrl-bottom-left {
+  left: calc(var(--left-dock) + 8px);
+}
+
+.map-shell:has(#chat-panel) .maplibregl-ctrl-bottom-right,
+.map-shell:has(#chat-panel) .maplibregl-ctrl-bottom-left {
+  bottom: min(42vh, 420px);
 }
 
 /* --- centre markers ------------------------------------------------------ */
@@ -11,7 +36,7 @@
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  background: rgba(26, 107, 138, 0.55);
+  background: color-mix(in srgb, var(--accent) 62%, transparent);
   border: 2px solid #fff;
   box-shadow: 0 1px 4px rgba(20, 30, 50, 0.4);
   cursor: help;

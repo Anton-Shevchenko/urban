@@ -1,28 +1,34 @@
 import { useContext, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import type { Feature } from 'geojson';
 import { ramp } from '../scoring/color';
-import { PILLAR_KEYS, PILLAR_LABELS } from '../scoring/engine';
-import { locationScore } from '../scoring/locationScore';
-import type { PipelinePoint, ScoringEngine } from '../scoring/types';
+import {
+  buildHexInfoModel,
+  formatAmenityPresence,
+  mergeCityHexProps,
+  type HexInfoModel,
+} from '../map/hexInfoModel';
+import type { ScoringEngine } from '../scoring/types';
 import { ChatContext, CityDataContext, PaintContext } from '../wohnindex/contexts';
 import { COMPARE_AI_PROMPT, MAX_COMPARE, chatHexFromItem } from '../wohnindex/compareSnapshot';
 import { useCompare } from '../wohnindex';
 import type { CompareItem } from '../wohnindex';
 import { HexInfoModal } from './HexInfoModal';
 
-function computeCard(item: CompareItem, engine: ScoringEngine | null) {
-  const result = locationScore(
-    item.props as PipelinePoint,
-    engine
-      ? {
-          pillarWeights: engine.getPillarWeights(),
-          groupMultipliers: engine.getGroupMultipliers(),
-          affordabilityFocus: engine.getAffordabilityFocus?.() ?? 0,
-          cityPercentile: item.cityPercentile ?? null,
-        }
-      : { cityPercentile: item.cityPercentile ?? null },
-  );
-  const comfort = result.objectiveScore ?? result.score;
+function factsForItem(
+  item: CompareItem,
+  engine: ScoringEngine | null,
+  cityFeatures: Feature[] | undefined,
+): HexInfoModel {
+  const props = mergeCityHexProps(item.props, cityFeatures);
+  return buildHexInfoModel(props, item.cityName, {
+    engine,
+    cityPercentile: item.cityPercentile ?? null,
+  });
+}
+
+function computeCard(info: HexInfoModel, item: CompareItem) {
+  const comfort = info.comfort;
   const size = Number(item.sizeM2);
   const price = Number(item.pricePerM2);
   const total = Number.isFinite(size) && size > 0 && Number.isFinite(price) && price > 0 ? size * price : null;
@@ -30,14 +36,26 @@ function computeCard(item: CompareItem, engine: ScoringEngine | null) {
   const [r, g, b] = ramp(comfort ?? 0);
   return {
     comfort,
-    match: result.personalMatchScore ?? null,
-    percentile: result.cityPercentile ?? null,
-    confidence: result.confidence ?? null,
+    percentile: info.percentile,
+    confidence: info.confidence,
     total,
     ratio,
     color: comfort == null ? '#BDBDBD' : `rgb(${r},${g},${b})`,
-    pillars: result.pillars,
+    info,
   };
+}
+
+function bestIndex(values: Array<number | null>, preferHigh: boolean): number | null {
+  let best: number | null = null;
+  let idx: number | null = null;
+  values.forEach((v, i) => {
+    if (v == null || !Number.isFinite(v)) return;
+    if (best == null || (preferHigh ? v > best : v < best)) {
+      best = v;
+      idx = i;
+    }
+  });
+  return idx;
 }
 
 const euro = (v: number) => v.toLocaleString('de-DE', { maximumFractionDigits: 0 }) + ' €';
@@ -54,7 +72,12 @@ export function ComparePanel({ variant = 'map' }: Props) {
   const navigate = useNavigate();
   const engine = paint?.engine ?? null;
   const [infoItem, setInfoItem] = useState<CompareItem | null>(null);
-  const cards = comparison.map((item) => ({ item, m: computeCard(item, engine) }));
+
+  const cards = comparison.map((item) => {
+    const features = city?.citySlug === item.citySlug ? city.features : undefined;
+    const info = factsForItem(item, engine, features);
+    return { item, m: computeCard(info, item), info };
+  });
   let bestId: string | null = null;
   let bestRatio = -Infinity;
   cards.forEach(({ item, m }) => {
@@ -64,6 +87,29 @@ export function ComparePanel({ variant = 'map' }: Props) {
     }
   });
   const cityCount = new Set(comparison.map((i) => i.citySlug || i.cityName)).size;
+  const showGrid = cards.length >= 2;
+  const pillarBest = showGrid
+    ? cards[0].info.pillars.map((_, row) =>
+        bestIndex(
+          cards.map((c) => c.info.pillars[row]?.score ?? null),
+          true,
+        ),
+      )
+    : [];
+  const amenityBest = showGrid
+    ? cards[0].info.walks.map((_, row) =>
+        bestIndex(
+          cards.map((c) => {
+            const w = c.info.walks[row];
+            if (!w) return null;
+            if (w.inHex != null && w.inHex > 0) return 0;
+            if (w.minutes != null && w.minutes < 1) return 0;
+            return w.minutes;
+          }),
+          false,
+        ),
+      )
+    : [];
 
   function openOnMap(item: CompareItem) {
     if (!item.citySlug) return;
@@ -77,8 +123,9 @@ export function ComparePanel({ variant = 'map' }: Props) {
     if (comparison.length < 2) return;
     const first = comparison.find((item) => item.citySlug && item.h3);
     if (!first) return;
+    const features = city?.citySlug === first.citySlug ? city.features : undefined;
+    const next = chatHexFromItem({ ...first, props: mergeCityHexProps(first.props, features) });
     requestChatPrompt(COMPARE_AI_PROMPT);
-    const next = chatHexFromItem(first);
     if (chat && next) {
       chat.setChatHex(next);
       chat.setChatOpen(true);
@@ -94,7 +141,7 @@ export function ComparePanel({ variant = 'map' }: Props) {
   return (
     <aside
       id="compare-panel"
-      className={variant === 'home' ? 'is-home' : undefined}
+      className={variant === 'home' ? 'is-home' : showGrid ? 'is-grid' : undefined}
       aria-label="Gemerkte Orte"
     >
       <header className="compare-head">
@@ -113,10 +160,59 @@ export function ComparePanel({ variant = 'map' }: Props) {
           </button>
         </div>
       </header>
+      <div className="compare-scroll">
       <p className="compare-hint">
-        Klick auf ein Hexagon merkt es. × nimmt es runter. Bis zu {MAX_COMPARE}, auch aus
-        verschiedenen Städten — dann mit KI vergleichen.
+        Klick merkt ein Hexagon. Die Tabelle vergleicht Säulen und Angebot. Bis zu {MAX_COMPARE},
+        auch aus verschiedenen Städten.
       </p>
+      {showGrid && variant === 'home' ? (
+        <div className="compare-grid-wrap">
+          <table className="compare-grid">
+            <thead>
+              <tr>
+                <th> </th>
+                {cards.map(({ item }) => (
+                  <th key={item.id}>
+                    {item.cityName}
+                    <span>#{String(item.h3).slice(-6)}</span>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {cards[0].info.pillars.map((row, rowIdx) => (
+                <tr key={row.key}>
+                  <th>{row.label}</th>
+                  {cards.map((c, col) => {
+                    const score = c.info.pillars[rowIdx]?.score;
+                    return (
+                      <td
+                        key={c.item.id}
+                        className={pillarBest[rowIdx] === col ? 'is-best' : undefined}
+                      >
+                        {score == null ? '—' : Math.round(score)}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+              {cards[0].info.walks.map((row, rowIdx) => (
+                <tr key={row.key}>
+                  <th>{row.label}</th>
+                  {cards.map((c, col) => (
+                    <td
+                      key={c.item.id}
+                      className={amenityBest[rowIdx] === col ? 'is-best' : undefined}
+                    >
+                      {formatAmenityPresence(c.info.walks[rowIdx] ?? row)}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
       <div className="compare-list">
         {cards.map(({ item, m }) => (
           <div key={item.id} className={`compare-card${item.id === bestId ? ' is-best' : ''}`}>
@@ -164,22 +260,6 @@ export function ComparePanel({ variant = 'map' }: Props) {
               {' · '}
               Konfidenz: {m.confidence == null ? '—' : `${Math.round(m.confidence * 100)}%`}
             </p>
-            <table className="cc-factors">
-              <tbody>
-                {PILLAR_KEYS.map((key) => {
-                  const pillars = m.pillars as Record<string, number | null | undefined>;
-                  const val = pillars[key];
-                  const label = PILLAR_LABELS[key] || key;
-                  return (
-                    <tr key={key}>
-                      <td>{label}</td>
-                      <td>–</td>
-                      <td>{val == null ? '—' : Number(val).toFixed(0)}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
             <div className="cc-inputs">
               <label>
                 m²
@@ -225,6 +305,7 @@ export function ComparePanel({ variant = 'map' }: Props) {
             ) : null}
           </div>
         ))}
+      </div>
       </div>
       {infoItem ? (
         <HexInfoModal

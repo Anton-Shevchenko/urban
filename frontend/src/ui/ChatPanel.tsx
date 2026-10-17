@@ -23,9 +23,9 @@ export function ChatPanel() {
   const abortRef = useRef<AbortController | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
 
-  // Keep this above the pending-prompt effect so a focus change cannot abort the new turn.
+  // Switching hex should not abort an in-flight compare; sendTurn already
+  // cancels the previous request when a new one starts.
   useEffect(() => {
-    abortRef.current?.abort();
     setMessages([]);
     setError(null);
     setStreaming(false);
@@ -124,16 +124,29 @@ export function ChatPanel() {
 
   if (!chatOpen) {
     return (
-      <button
-        type="button"
-        className="chat-reopen"
-        onClick={() => setChatOpen(true)}
-        title="Hex-Chat einblenden"
-        aria-controls="chat-panel"
-        aria-expanded="false"
-      >
-        Chat
-      </button>
+        <button
+          type="button"
+          className="chat-reopen"
+          onClick={() => setChatOpen(true)}
+          title="Hex-Chat einblenden"
+          aria-controls="chat-panel"
+          aria-expanded="false"
+        >
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden>
+            <path
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.7"
+              strokeLinejoin="round"
+              d="M12 3.2 19.4 7.4v8.4L12 20.8 4.6 15.8V7.4Z"
+            />
+            <path
+              fill="currentColor"
+              d="M8.2 10.2h7.6v1.4H8.2zm0 2.8h5.2v1.4H8.2z"
+            />
+          </svg>
+          Chat
+        </button>
     );
   }
 

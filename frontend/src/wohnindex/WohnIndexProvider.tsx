@@ -33,7 +33,9 @@ export function WohnIndexProvider({
     hasRent: store.hasRent,
     searchStatus: store.searchStatus,
     searching: store.searching,
+    dataEpoch: store.dataEpoch,
     runSearch: store.runSearch,
+    refreshCity: store.refreshCity,
   }), [
     store.loading,
     store.loadError,
@@ -44,7 +46,9 @@ export function WohnIndexProvider({
     store.hasRent,
     store.searchStatus,
     store.searching,
+    store.dataEpoch,
     store.runSearch,
+    store.refreshCity,
   ]);
 
   const weights = useMemo<WeightsSlice>(() => ({
