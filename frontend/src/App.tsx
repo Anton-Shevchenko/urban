@@ -1,9 +1,12 @@
 import { BrowserRouter, Link, Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom';
 import { useCallback } from 'react';
-import { CompareSessionProvider, WohnIndexProvider, useCityData, usePaint } from './wohnindex';
+import { CompareSessionProvider, WohnIndexProvider, useCityData, useMapViewState, usePaint } from './wohnindex';
 import { useTheme, type ThemeMode } from './hooks/useTheme';
 import { usePanelOpen } from './hooks/usePanelOpen';
+import { displayCityChrome } from './map/cyclewayChrome';
 import { MapView } from './map/MapView';
+import { useCyclewaySearch } from './map/useCyclewaySearch';
+import { CFG } from './scoring/constants';
 import { ControlPanel } from './ui/ControlPanel';
 import { ComparePanel } from './ui/ComparePanel';
 import { ChatPanel } from './ui/ChatPanel';
@@ -26,13 +29,26 @@ function MapAppShell({
   panelOpen: boolean;
   togglePanel: () => void;
 }) {
-  const { cityName, loading, loadError } = useCityData();
+  const { cityName, citySlug, meta, features, loading, loadError } = useCityData();
   const { painting } = usePaint();
+  const { mapView, paintMapView, setMapView } = useMapViewState();
+  const cyclewaySearch = useCyclewaySearch(setMapView);
+  const chrome = displayCityChrome({
+    mapView,
+    wohnindexName: cityName,
+    wohnindexSlug: citySlug,
+    cyclewayName: cyclewaySearch.name,
+    cyclewaySlug: cyclewaySearch.slug,
+    meta,
+    featureCount: features.length,
+  });
+  const cyclewaysOn = mapView === 'cycleways' || paintMapView === 'cycleways';
+  const activeStyleUrl = cyclewaysOn ? CFG.styleUrl : mapStyleUrl;
 
   return (
     <>
       <TopBar
-        cityName={cityName}
+        cityName={chrome.cityName}
         theme={theme}
         onToggleTheme={toggleTheme}
         brandSlot={
@@ -41,9 +57,14 @@ function MapAppShell({
           </Link>
         }
       />
-      <MapView mapStyleUrl={mapStyleUrl} />
+      <MapView mapStyleUrl={activeStyleUrl} cyclewaySearch={cyclewaySearch} />
       {panelOpen ? (
-        <ControlPanel onClose={togglePanel} />
+        <ControlPanel
+          onClose={togglePanel}
+          cityLabel={chrome.cityName}
+          hexSummary={chrome.hexSummary}
+          cityType={chrome.cityType}
+        />
       ) : (
         <button
           type="button"

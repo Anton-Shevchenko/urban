@@ -5,10 +5,13 @@ import { useCityData, useMapViewState, useWeights } from '../wohnindex';
 
 type Props = {
   onClose: () => void;
+  cityLabel: string;
+  hexSummary: string | null;
+  cityType: string | null;
 };
 
-export function ControlPanel({ onClose }: Props) {
-  const { cityName, meta, features, hasRent, searchStatus, searching, runSearch } = useCityData();
+export function ControlPanel({ onClose, cityLabel, hexSummary, cityType }: Props) {
+  const { meta, features, hasRent, searchStatus, searching, runSearch } = useCityData();
   const {
     desiredAreaM2,
     setDesiredAreaM2,
@@ -40,7 +43,7 @@ export function ControlPanel({ onClose }: Props) {
 
   const legendNote = useMemo(() => {
     if (mapView === 'cycleways') {
-      return 'Radwege · nur baulich getrennt (highway=cycleway, cycleway=track) · kein Radfahrstreifen · OpenStreetMap-Linien, keine Hex-Füllung';
+      return 'Radwege · sechs OSM-Klassen · Farben und Filter in der Kartenlegende · Linien ohne Hexagon-Füllung';
     }
     if (mapView === 'price') {
       return 'Kaltmiete · nur beobachtete Nettokaltmiete · stadtrelativ, günstig = hoch · grau = keine Beobachtung · keine Schätzung';
@@ -67,13 +70,11 @@ export function ControlPanel({ onClose }: Props) {
     runSearch(input.value);
   };
 
-  const cityType = (meta as { city_type?: string }).city_type;
-
   return (
     <aside id="panel" aria-label="Steuerung">
       <header className="panel-head">
         <div className="panel-head-text">
-          <h1>{cityName}</h1>
+          <h1>{cityLabel}</h1>
           <p className="subtitle">
             Infrastruktur · Läden, Cafés, Services · 0–100
             {cityType ? ` · ${cityType}` : ''}
@@ -195,11 +196,9 @@ export function ControlPanel({ onClose }: Props) {
             ))}
           </select>
         </label>
-        <div className={`legend-bar${streetOverlay ? ' is-cycleways' : ''}`} id="legend-bar" />
+        {streetOverlay ? null : <div className="legend-bar" id="legend-bar" />}
         {streetOverlay ? (
-          <div className="legend-scale">
-            <span>Getrennte Radwege</span>
-          </div>
+          <p className="section-hint">Legende auf der Karte: jeder Typ lässt sich ein- und ausblenden.</p>
         ) : rentFill ? (
           <div className="legend-scale">
             <span>0 teuer</span>
@@ -215,9 +214,7 @@ export function ControlPanel({ onClose }: Props) {
       </section>
 
       <footer className="panel-foot">
-        <span>
-          {meta.count ?? features.length} Hexagone · H3 res {meta.h3_res ?? '?'}
-        </span>
+        {hexSummary ? <span id="hex-count">{hexSummary}</span> : null}
         <nav>
           <a href="/legal/impressum.html">Impressum</a> ·{' '}
           <a href="/legal/datenschutz.html">Datenschutz</a>

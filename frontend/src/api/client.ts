@@ -299,31 +299,114 @@ export async function fetchCityGeojson(slug: string, opts?: RequestOptions): Pro
   return resp.json();
 }
 
-const EMPTY_CYCLEWAYS: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
+export type PlaceSuggestion = {
+  name: string;
+  state: string;
+  type: string;
+  label: string;
+};
 
-async function fetchGeojson(url: string, opts?: RequestOptions): Promise<GeoJSON.FeatureCollection | null> {
-  try {
-    const resp = await timedFetch(url, { cache: 'no-store' }, opts, TIMEOUT_GEOJSON_MS);
-    if (!resp.ok) return null;
-    return resp.json();
-  } catch {
-    return null;
+export async function fetchPlaceSuggestions(
+  q: string,
+  opts?: RequestOptions,
+): Promise<PlaceSuggestion[]> {
+  await ensureApiBase();
+  const resp = await timedFetch(
+    apiUrl(`/api/suggest?q=${encodeURIComponent(q)}`),
+    { cache: 'no-store' },
+    opts,
+    TIMEOUT_JSON_MS,
+  );
+  const payload = await resp.json().catch(() => ({}));
+  if (!resp.ok) throw new Error(parseApiError(payload, resp.status));
+  const rows = (payload as { suggestions?: PlaceSuggestion[] }).suggestions;
+  return Array.isArray(rows) ? rows : [];
+}
+
+export type CyclewaysResponse = {
+  status: string;
+  slug: string;
+  name?: string;
+  bbox?: [number, number, number, number];
+  center?: [number, number];
+  message?: string;
+  step?: number;
+  total?: number;
+  cached?: boolean;
+};
+
+export async function requestCycleways(q: string, opts?: RequestOptions): Promise<CyclewaysResponse> {
+  await ensureApiBase();
+  const resp = await timedFetch(
+    apiUrl('/api/cycleways'),
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ q }),
+    },
+    opts,
+    TIMEOUT_GENERATE_MS,
+  );
+  const payload = await resp.json().catch(() => ({}));
+  if (!resp.ok) throw new Error(parseApiError(payload, resp.status));
+  return payload as CyclewaysResponse;
+}
+
+export async function fetchCyclewaysStatus(
+  slug: string,
+  opts?: RequestOptions,
+): Promise<CyclewaysResponse> {
+  const resp = await timedFetch(
+    apiUrl(`/api/cycleways/status/${encodeURIComponent(slug)}`),
+    { cache: 'no-store' },
+    opts,
+    TIMEOUT_JSON_MS,
+  );
+  const payload = await resp.json().catch(() => ({}));
+  if (!resp.ok) throw new Error(parseApiError(payload, resp.status));
+  return payload as CyclewaysResponse;
+}
+
+/** Poll the cycle-infra job. Does not touch Wohnindex generation status. */
+export async function pollCycleways(
+  slug: string,
+  onProgress: (msg: string) => void,
+  opts?: PollOptions,
+): Promise<void> {
+  const deadline = Date.now() + (opts?.deadlineMs ?? 8 * 60_000);
+  const interval = opts?.intervalMs ?? POLL_INTERVAL_MS;
+  for (;;) {
+    await delay(interval, opts?.signal);
+    if (Date.now() > deadline) {
+      throw new TimeoutError('Radwege haben zu lange zum Laden gebraucht.');
+    }
+    let data: CyclewaysResponse;
+    try {
+      data = await fetchCyclewaysStatus(slug, opts);
+    } catch (err) {
+      if (isAbortError(err)) throw err;
+      continue;
+    }
+    if (data.status === 'ready') return;
+    if (data.status === 'error') throw new Error(data.message || 'Radwege konnten nicht geladen werden');
+    onProgress(data.message || 'Radwege werden geladen …');
   }
 }
 
+/** Schema-2 cycle infrastructure. `null` means the cache is not ready yet. */
 export async function fetchCyclewaysGeojson(
   slug: string,
   opts?: RequestOptions,
-): Promise<GeoJSON.FeatureCollection> {
-  const fromApi = await fetchGeojson(apiUrl(`/api/city/${slug}/cycleways.geojson`), opts);
-  if (fromApi?.features?.length) return fromApi;
-  const fromPublic = await fetchGeojson(`/data/cycleways/${encodeURIComponent(slug)}.geojson`, opts);
-  if (fromPublic?.features?.length) return fromPublic;
-  if (slug === 'muenchen' || slug === 'munich') {
-    const bundled = await fetchGeojson('/data/cycleways.geojson', opts);
-    if (bundled?.features?.length) return bundled;
-  }
-  return EMPTY_CYCLEWAYS;
+): Promise<GeoJSON.FeatureCollection | null> {
+  const resp = await timedFetch(
+    apiUrl(`/api/city/${encodeURIComponent(slug)}/cycleways.geojson`),
+    { cache: 'no-store' },
+    opts,
+    TIMEOUT_GEOJSON_MS,
+  );
+  if (resp.status === 404) return null;
+  if (!resp.ok) throw new Error(`Radwege konnten nicht geladen werden (${resp.status})`);
+  return resp.json();
 }
 
 export async function fetchDestMatrix(

@@ -12,22 +12,27 @@ import {
   usePaint,
 } from '../wohnindex';
 import type { HexPaintSnapshot } from '../wohnindex/types';
+import { CyclewayLegend } from './CyclewayLegend';
+import { CYCLEWAY_LEGEND } from './cyclewayStyle';
 import { HexTooltip } from './HexTooltip';
 import { buildHexTooltipModel, type HexTooltipModel } from './hexTooltipModel';
 import { LAYER_ID } from './layerConfig';
+import { MapSearch } from './MapSearch';
 import { queryHexAtPoint, resolveQueriedHex } from './queryHex';
 import { useCyclewayOverlay } from './useCyclewayOverlay';
+import type { CyclewaySearchState } from './useCyclewaySearch';
 import { useHexPaint } from './useHexPaint';
 
 type Props = {
   mapStyleUrl: string;
+  cyclewaySearch: CyclewaySearchState;
 };
 
 // Module-level so Vite HMR re-evaluates it and the map is recreated instead of
 // keeping a MapLibre instance that still has Shift-gated click / box-zoom.
 const MAP_GENERATION = Date.now();
 
-export function MapView({ mapStyleUrl }: Props) {
+export function MapView({ mapStyleUrl, cyclewaySearch }: Props) {
   const city = useCityData();
   const dest = useDestinations();
   const compare = useCompare();
@@ -82,10 +87,19 @@ export function MapView({ mapStyleUrl }: Props) {
   const chatRef = useRef(chat);
   chatRef.current = chat;
 
+  const cyclewaysVisible = mapView.mapView === 'cycleways';
+  const [enabledKinds, setEnabledKinds] = useState(() => CYCLEWAY_LEGEND.map((entry) => entry.kind));
+  const cycleLockRef = useRef(false);
+  const mapViewRef = useRef(mapView.mapView);
+  mapViewRef.current = mapView.mapView;
+  const layerSlug = cyclewaySearch.holding
+    ? ''
+    : (cyclewaySearch.slug ?? (cyclewaysVisible ? city.citySlug : ''));
+
   const onHexMove = useRef<(e: MapLayerMouseEvent) => void>(() => {});
   onHexMove.current = (e) => {
     const s = snapshotRef.current;
-    if ((s.paintMapView ?? s.mapView) === 'cycleways') {
+    if (mapViewRef.current === 'cycleways' || (s.paintMapView ?? s.mapView) === 'cycleways') {
       setTooltip(null);
       return;
     }
@@ -101,6 +115,7 @@ export function MapView({ mapStyleUrl }: Props) {
   const onHexClick = useRef<(e: MapMouseEvent) => void>(() => {});
   onHexClick.current = (e) => {
     if (destRef.current.pickDestinationMode) return;
+    if (mapViewRef.current === 'cycleways') return;
     const hit = queryHexAtPoint(e.target, e.point);
     const f = resolveQueriedHex(hit, snapshotRef.current.features);
     if (!f) return;
@@ -209,14 +224,39 @@ export function MapView({ mapStyleUrl }: Props) {
 
   useCyclewayOverlay({
     mapRef,
-    citySlug: city.citySlug,
-    paintMapView: mapView.paintMapView ?? mapView.mapView,
+    citySlug: layerSlug,
+    visible: cyclewaysVisible,
+    enabledKinds,
     styleEpoch,
   });
 
   useEffect(() => {
+    cycleLockRef.current = false;
+  }, [city.citySlug]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    const bbox = cyclewaySearch.bbox;
+    if (!map || !bbox) return;
+    cycleLockRef.current = true;
+    const [south, west, north, east] = bbox;
+    const run = () => {
+      map.fitBounds(
+        [
+          [west, south],
+          [east, north],
+        ],
+        { padding: 48, duration: 700 },
+      );
+    };
+    if (map.isStyleLoaded()) run();
+    else map.once('load', run);
+  }, [cyclewaySearch.bbox, styleEpoch]);
+
+  useEffect(() => {
     const map = mapRef.current;
     if (!map || city.loading) return;
+    if (cycleLockRef.current) return;
     if (compare.pendingFocus?.citySlug === city.citySlug) return;
     const bbox = city.meta.bbox;
     if (Array.isArray(bbox) && bbox.length === 4) {
@@ -284,9 +324,24 @@ export function MapView({ mapStyleUrl }: Props) {
     });
   }, [dest.destinations]);
 
+  const toggleKind = (kind: string) => {
+    setEnabledKinds((prev) => (
+      prev.includes(kind) ? prev.filter((item) => item !== kind) : [...prev, kind]
+    ));
+  };
+
   return (
     <>
       <div id="map" ref={containerRef} />
+      <MapSearch
+        busy={cyclewaySearch.busy}
+        status={cyclewaySearch.statusText}
+        error={cyclewaySearch.error}
+        onSelect={cyclewaySearch.openCity}
+      />
+      {cyclewaysVisible ? (
+        <CyclewayLegend enabled={enabledKinds} onToggle={toggleKind} />
+      ) : null}
       {tooltip ? <HexTooltip model={tooltip} /> : null}
     </>
   );
