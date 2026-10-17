@@ -55,23 +55,22 @@ def clamp(v: float, lo: float = 0.0, hi: float = 100.0) -> float:
     return max(lo, min(hi, v))
 
 
-# Each objective pillar and the exported properties it may be read from, most
-# specific first. Aliases exist because older exports used the legacy names.
-_PILLAR_SOURCES: dict[str, tuple[str, ...]] = {
-    "daily_life": ("s_daily_life", "s_daily_needs"),
-    "walk": ("s_walk", "s_walking_quality"),
-    "green": ("s_green",),
-    "transit": ("s_transit", "s_transit_service"),
-    "quiet": ("s_quiet", "s_noise"),
-    "housing_affordability": ("s_housing_affordability", "s_housing_value", "s_rent_absolute"),
+# Canonical exported pillar. A missing field stays missing — no alias, no 50.
+_PILLAR_SOURCES: dict[str, str] = {
+    "daily_life": "s_daily_life",
+    "walk": "s_walk",
+    "green": "s_green",
+    "transit": "s_transit",
+    "quiet": "s_quiet",
+    "housing_affordability": "s_housing_affordability",
 }
 
 
-def pillar_scores(p: dict) -> dict[str, float]:
-    out: dict[str, float] = {}
-    for pillar, keys in _PILLAR_SOURCES.items():
-        value = next((p[k] for k in keys if p.get(k) is not None), 50)
-        out[pillar] = clamp(float(value))
+def pillar_scores(p: dict) -> dict[str, float | None]:
+    out: dict[str, float | None] = {}
+    for pillar, key in _PILLAR_SOURCES.items():
+        raw = p.get(key)
+        out[pillar] = None if raw is None else clamp(float(raw))
     return out
 
 
@@ -82,8 +81,18 @@ def living_score(p: dict, weights: dict[str, float] | None = None) -> float:
     if p.get("s_living") is not None and w is OBJECTIVE_WEIGHTS:
         return clamp(float(p["s_living"]))
     pil = pillar_scores(p)
-    total_w = sum(w.values()) or 1.0
-    return clamp(sum(w[k] * pil[k] for k in PILLAR_KEYS) / total_w)
+    num = 0.0
+    den = 0.0
+    for key in PILLAR_KEYS:
+        value = pil[key]
+        weight = float(w.get(key, 0) or 0)
+        if value is None or weight <= 0:
+            continue
+        num += weight * value
+        den += weight
+    if den <= 0:
+        raise ValueError("living score has no canonical pillar values")
+    return clamp(num / den)
 
 
 def pct(vals: list[float], q: float) -> float:
@@ -157,7 +166,10 @@ def validate_city(
         f"share≥70={share70 * 100:.1f}%"
     )
     for k in PILLAR_KEYS:
-        vals = metrics[k]
+        vals = [v for v in metrics[k] if v is not None]
+        if not vals:
+            print(f"  {k:14s} missing")
+            continue
         print(
             f"  {k:14s} mean={sum(vals) / len(vals):5.1f} p10={pct(vals, 0.1):5.1f} p90={pct(vals, 0.9):5.1f}"
         )
@@ -206,10 +218,13 @@ def validate_city(
         sc = living_score(p)
         pil = pillar_scores(p)
         spot_scores[name] = sc
+        def _fmt(value: float | None) -> str:
+            return "  —" if value is None else f"{value:4.0f}"
+
         print(
             f"  {name:22s} living={sc:5.1f} "
-            f"daily={pil['daily_life']:4.0f} walk={pil['walk']:4.0f} "
-            f"transit={pil['transit']:4.0f} green={pil['green']:4.0f}"
+            f"daily={_fmt(pil['daily_life'])} walk={_fmt(pil['walk'])} "
+            f"transit={_fmt(pil['transit'])} green={_fmt(pil['green'])}"
         )
 
     # Soft ordering expectations

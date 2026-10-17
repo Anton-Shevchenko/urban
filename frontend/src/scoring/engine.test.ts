@@ -85,18 +85,10 @@ describe('objective-v2 Living Score', () => {
     }
   });
 
-  it('derives walking quality when walk pillar missing', () => {
+  it('leaves walk null when s_walk is missing', () => {
     const p = { ...features[0].properties };
     delete p.s_walk;
-    delete p.s_walking_quality;
-    delete p.walking_quality_score;
-    delete p.wq_network;
-    const wq = deriveWalkingQuality(p);
-    // May be null if no inputs — that is correct (not fake 50).
-    if (wq != null) {
-      expect(wq).toBeGreaterThanOrEqual(0);
-      expect(wq).toBeLessThanOrEqual(100);
-    }
+    expect(deriveWalkingQuality(p)).toBeNull();
   });
 
   it('preset does not change objectiveScore on map default mode', () => {

@@ -79,7 +79,7 @@ export function scoreHexPaint(input: HexPaintInput): HexPaintOutput {
     hexes.map((properties) => ({ properties })),
   );
   const primary = isPrimaryPaintView(paintMapView);
-  const pillarKey = paintMapView === 'housing_value' ? 'housing_affordability' : paintMapView;
+  const pillarKey = paintMapView;
   const scores = new Float32Array(hexes.length);
   const passed = new Uint8Array(hexes.length);
 

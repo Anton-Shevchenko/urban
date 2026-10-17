@@ -13,7 +13,6 @@ const PILLAR_WEAKNESS: Record<string, string> = {
   centrality: 'Lage zu Aktivitätszentren',
   quiet: 'Lärmbelastung',
   housing_affordability: 'Wohnkosten (absolut)',
-  housing_value: 'Wohnkosten (absolut)',
 };
 
 const PILLAR_STRENGTH: Record<string, string> = {
@@ -24,7 +23,6 @@ const PILLAR_STRENGTH: Record<string, string> = {
   centrality: 'zentrale Lage zu Aktivitätszentren',
   quiet: 'ruhige Umgebung',
   housing_affordability: 'günstigere absolute Wohnkosten',
-  housing_value: 'günstigere absolute Wohnkosten',
 };
 
 function minutesLabel(m: number | null | undefined): string | null {

@@ -18,8 +18,6 @@ CONTRACTS_DIR = REPO_ROOT / "contracts"
 def test_config_weights_come_from_contract():
     for pillar, weight in generated.OBJECTIVE_WEIGHTS.items():
         assert config.LIVING_SCORE_WEIGHTS[pillar] == weight
-    for alias, target in generated.OBJECTIVE_WEIGHT_ALIASES.items():
-        assert config.LIVING_SCORE_WEIGHTS[alias] == generated.OBJECTIVE_WEIGHTS[target]
     for pillar, weight in generated.INFORMATIONAL_PILLARS.items():
         assert config.LIVING_SCORE_WEIGHTS[pillar] == weight
 
@@ -29,7 +27,8 @@ def test_objective_weights_sum_to_one():
 
 
 def test_daily_life_tables_agree_with_contract():
-    # The pipeline writes dl_other where the contract calls the group "leisure".
+    assert "leisure" in config.DAILY_LIFE_GROUP_WEIGHTS
+    assert "other" not in config.DAILY_LIFE_GROUP_WEIGHTS
     assert set(config.DAILY_LIFE_GROUP_WEIGHTS) == set(config.DAILY_LIFE_CATEGORY_WEIGHTS)
     assert abs(sum(config.DAILY_LIFE_GROUP_WEIGHTS.values()) - 1.0) < 1e-9
     for group, categories in config.DAILY_LIFE_CATEGORY_WEIGHTS.items():

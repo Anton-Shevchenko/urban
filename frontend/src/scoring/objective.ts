@@ -7,10 +7,8 @@ import {
   CHOICE_WEIGHT,
   CONFIDENCE_THRESHOLDS,
   NEAREST_WEIGHT,
-  OBJECTIVE_NORMALIZATION,
   SCORE_METHOD_VERSION,
   bandScore,
-  normalizeByScale,
 } from './normalization';
 import { clamp100, finiteScore, num } from './num';
 import type {
@@ -28,7 +26,6 @@ import type {
  */
 import {
   DAILY_LIFE_CATEGORY_WEIGHTS,
-  DAILY_LIFE_GROUP_ALIASES,
   DAILY_LIFE_GROUP_WEIGHTS,
   OBJECTIVE_PILLAR_KEYS,
   OBJECTIVE_WEIGHTS,
@@ -55,9 +52,6 @@ export const LIVING_WEIGHTS: Record<PersonalPillarKey, number> = {
   ...OBJECTIVE_WEIGHTS,
   centrality: 0,
 };
-
-/** Legacy group name still emitted by the pipeline (dl_other). */
-const GROUP_ALIAS: Record<string, string> = DAILY_LIFE_GROUP_ALIASES;
 
 export const DAILY_LIFE_GROUPS: Record<string, string[]> = Object.fromEntries(
   Object.entries(DAILY_LIFE_CATEGORY_WEIGHTS).map(([g, cats]) => [g, Object.keys(cats)]),
@@ -144,8 +138,7 @@ export function scoreDailyLifeGroup(
   p: PipelinePoint,
   group: string,
 ): ScoredValue {
-  const resolved = GROUP_ALIAS[group] ?? group;
-  const catWeights = DAILY_LIFE_CATEGORY_WEIGHTS[resolved];
+  const catWeights = DAILY_LIFE_CATEGORY_WEIGHTS[group];
   if (!catWeights) return emptyScored([`group:${group}`]);
 
   let sum = 0;
@@ -193,10 +186,7 @@ export function dailyLifeFromGroups(
 
   for (const [group, baseW] of Object.entries(DAILY_LIFE_GROUP_WEIGHTS)) {
     const multKey = `dl_${group}`;
-    const legacyKey = group === 'leisure' ? 'dl_other' : multKey;
-    const mult = groupMultipliers?.[multKey]
-      ?? groupMultipliers?.[legacyKey]
-      ?? 1;
+    const mult = groupMultipliers?.[multKey] ?? 1;
     const ww = baseW * (Number.isFinite(mult) ? mult : 1);
     weightSum += ww;
     const scored = scoreDailyLifeGroup(p, group);
@@ -220,187 +210,36 @@ export function dailyLifeFromGroups(
   };
 }
 
+export function scoreDailyLife(p: PipelinePoint): ScoredValue {
+  return scoredFromPrecomputed(num(p.s_daily_life), 's_daily_life');
+}
+
 export function scoreWalk(p: PipelinePoint): ScoredValue {
-  // Prefer absolute / raw walk scores — not city-normalized s_walk.
-  const raw = num(p.walking_quality_raw) ?? num(p.walking_quality_score);
-  if (raw != null) {
-    return {
-      score: clamp100(raw),
-      coverage: 1,
-      sourcesUsed: [p.walking_quality_raw != null ? 'walking_quality_raw' : 'walking_quality_score'],
-      missingInputs: [],
-    };
-  }
-  const wq = num(p.wq_network);
-  const ped = num(p.wq_ped_infra);
-  const calm = num(p.wq_traffic_calm);
-  const env = num(p.wq_environment);
-  const parts = [wq, ped, calm, env].filter((v): v is number => v != null);
-  if (parts.length) {
-    const score = clamp100(parts.reduce((a, b) => a + b, 0) / parts.length);
-    return {
-      score,
-      coverage: parts.length / 4,
-      sourcesUsed: ['wq_*'],
-      missingInputs: parts.length < 4 ? ['walking_quality_score'] : [],
-    };
-  }
-  // Last resort: city pillar is a proxy — mark as proxy with lower coverage.
-  const city = num(p.s_walk) ?? num(p.s_walking_quality);
-  if (city != null) {
-    return {
-      score: clamp100(city),
-      coverage: 0.55,
-      sourcesUsed: ['s_walk'],
-      missingInputs: ['walking_quality_score'],
-    };
-  }
-  return emptyScored(['walking_quality_score', 's_walk']);
+  return scoredFromPrecomputed(num(p.s_walk), 's_walk');
 }
 
 export function scoreGreen(p: PipelinePoint): ScoredValue {
-  const strict = num(p.s_green_strict);
-  if (strict != null) {
-    return {
-      score: clamp100(strict),
-      coverage: 1,
-      sourcesUsed: ['s_green_strict'],
-      missingInputs: [],
-    };
-  }
-  const parkDist = num(p.nearest_park_dist_m) ?? num(p.green_dist_m);
-  const share = num(p.green_share_inside_500m);
-  const canopy = num(p.tree_canopy_pct);
-  const parkScore = normalizeByScale(parkDist, OBJECTIVE_NORMALIZATION.park_dist_m);
-  const shareScore = normalizeByScale(share, OBJECTIVE_NORMALIZATION.green_share_pct);
-  const canopyScore = normalizeByScale(canopy, OBJECTIVE_NORMALIZATION.tree_canopy_pct);
-  const parts: { s: number; w: number; src: string }[] = [];
-  if (parkScore != null) parts.push({ s: parkScore, w: 0.4, src: 'nearest_park_dist_m' });
-  if (shareScore != null) parts.push({ s: shareScore, w: 0.35, src: 'green_share_inside_500m' });
-  if (canopyScore != null) parts.push({ s: canopyScore, w: 0.25, src: 'tree_canopy_pct' });
-  if (!parts.length) {
-    const city = num(p.s_green);
-    if (city != null) {
-      return {
-        score: clamp100(city),
-        coverage: 0.55,
-        sourcesUsed: ['s_green'],
-        missingInputs: ['s_green_strict'],
-      };
-    }
-    return emptyScored(['s_green_strict', 'nearest_park_dist_m']);
-  }
-  const tw = parts.reduce((a, b) => a + b.w, 0);
-  return {
-    score: clamp100(parts.reduce((a, b) => a + b.s * b.w, 0) / tw),
-    coverage: tw / 1.0,
-    sourcesUsed: parts.map((p0) => p0.src),
-    missingInputs: [],
-  };
+  return scoredFromPrecomputed(num(p.s_green), 's_green');
 }
 
 export function scoreTransit(p: PipelinePoint): ScoredValue {
-  const raw = num(p.transit_service_raw) ?? num(p.transit_service_score);
-  if (raw != null) {
-    return {
-      score: clamp100(raw),
-      coverage: 1,
-      sourcesUsed: [p.transit_service_raw != null ? 'transit_service_raw' : 'transit_service_score'],
-      missingInputs: [],
-    };
-  }
-  const city = num(p.s_transit) ?? num(p.s_transit_service);
-  if (city != null) {
-    return {
-      score: clamp100(city),
-      coverage: 0.55,
-      sourcesUsed: ['s_transit'],
-      missingInputs: ['transit_service_score'],
-    };
-  }
-  return emptyScored(['transit_service_score', 's_transit']);
+  return scoredFromPrecomputed(num(p.s_transit), 's_transit');
 }
 
 export function scoreQuiet(p: PipelinePoint): ScoredValue {
-  const db = num(p.noise_db);
-  if (db != null) {
-    const score = normalizeByScale(db, OBJECTIVE_NORMALIZATION.noise_db);
-    const conf = num(p.noise_confidence);
-    const sourceFactor = conf != null ? Math.max(0.5, Math.min(1, conf)) : 0.85;
-    return {
-      score: score != null ? clamp100(score) : null,
-      coverage: score != null ? sourceFactor : 0,
-      sourcesUsed: ['noise_db'],
-      missingInputs: [],
-    };
-  }
-  // s_quiet / s_noise may already be absolute-ish after pipeline quiet_raw;
-  // treat as proxy with lower coverage (city_normalize may have blended rank).
-  const quiet = num(p.s_quiet) ?? num(p.s_noise);
-  if (quiet != null) {
-    return {
-      score: clamp100(quiet),
-      coverage: 0.55,
-      sourcesUsed: ['s_quiet'],
-      missingInputs: ['noise_db'],
-    };
-  }
-  return emptyScored(['noise_db', 's_quiet']);
+  return scoredFromPrecomputed(num(p.s_quiet), 's_quiet');
 }
 
 /**
  * Absolute housing affordability only — no daily_life/walk/transit blend.
  */
 export function scoreHousingAffordability(p: PipelinePoint): ScoredValue {
-  const rent = num(p.rent_eur_m2);
-  if (rent != null) {
-    const score = normalizeByScale(rent, OBJECTIVE_NORMALIZATION.rent_eur_m2);
-    const rc = p.rent_confidence;
-    let sourceConf = 0.75;
-    if (rc === 'low') sourceConf = 0.55;
-    else if (rc === 'high') sourceConf = 1;
-    else if (typeof rc === 'number') sourceConf = Math.max(0.4, Math.min(1, rc));
-    return {
-      score: score != null ? clamp100(score) : null,
-      coverage: score != null ? sourceConf : 0,
-      sourcesUsed: ['rent_eur_m2'],
-      missingInputs: [],
-    };
-  }
-  // Absolute precomputed benchmark (not city-relative).
-  const bench = num(p.s_rent_kalt_benchmark) ?? num(p.s_rent_strict);
-  if (bench != null) {
-    return {
-      score: clamp100(bench),
-      coverage: 0.9,
-      sourcesUsed: ['s_rent_kalt_benchmark'],
-      missingInputs: ['rent_eur_m2'],
-    };
-  }
-  return emptyScored(['rent_eur_m2', 's_rent_kalt_benchmark']);
+  return scoredFromPrecomputed(num(p.s_housing_affordability), 's_housing_affordability');
 }
 
 /** Informational / personal-only centrality. */
 export function scoreCentrality(p: PipelinePoint): ScoredValue {
-  const strict = num(p.s_center_strict);
-  if (strict != null) {
-    return {
-      score: clamp100(strict),
-      coverage: 1,
-      sourcesUsed: ['s_center_strict'],
-      missingInputs: [],
-    };
-  }
-  const city = num(p.s_center);
-  if (city != null) {
-    return {
-      score: clamp100(city),
-      coverage: 0.7,
-      sourcesUsed: ['s_center'],
-      missingInputs: ['s_center_strict'],
-    };
-  }
-  return emptyScored(['s_center']);
+  return scoredFromPrecomputed(num(p.s_center), 's_center');
 }
 
 export type ObjectivePillarBundle = {
@@ -411,10 +250,7 @@ export type ObjectivePillarBundle = {
   proxiesUsed: string[];
 };
 
-/**
- * Prefer pipeline absolute pillars (objective-v2 export). Only recompute from
- * raw inputs when precomputed fields are missing — keeps map paint O(n) cheap.
- */
+/** Canonical exported pillar. Missing → null; no proxy and no alias. */
 function scoredFromPrecomputed(
   value: number | null,
   source: string,
@@ -434,39 +270,13 @@ export function computeObjectivePillars(
   groupMultipliers: Record<string, number> | null = null,
 ): ObjectivePillarBundle {
   void groupMultipliers;
-  // Fast path: absolute pillars already on the hex (schema ≥15 / objective-v2).
-  const preDaily = num(p.s_daily_life) ?? num(p.s_daily_needs);
-  const daily = preDaily != null
-    ? scoredFromPrecomputed(preDaily, 's_daily_life')
-    : dailyLifeFromGroups(p, null);
-
-  const preWalk = num(p.s_walk) ?? num(p.s_walking_quality) ?? num(p.walking_quality_score);
-  const walk = preWalk != null
-    ? scoredFromPrecomputed(preWalk, 's_walk')
-    : scoreWalk(p);
-
-  const preGreen = num(p.s_green) ?? num(p.s_green_strict);
-  const green = preGreen != null
-    ? scoredFromPrecomputed(preGreen, 's_green')
-    : scoreGreen(p);
-
-  const preTransit = num(p.s_transit) ?? num(p.s_transit_service) ?? num(p.transit_service_score);
-  const transit = preTransit != null
-    ? scoredFromPrecomputed(preTransit, 's_transit')
-    : scoreTransit(p);
-
-  const preQuiet = num(p.s_quiet) ?? num(p.s_noise);
-  const quiet = preQuiet != null
-    ? scoredFromPrecomputed(preQuiet, 's_quiet')
-    : scoreQuiet(p);
-
-  const preHousing = num(p.s_housing_affordability)
-    ?? num(p.s_rent_kalt_benchmark)
-    ?? num(p.s_rent_strict);
-  const housing = preHousing != null
-    ? scoredFromPrecomputed(preHousing, 's_housing_affordability')
-    : scoreHousingAffordability(p);
-
+  // Schema ≥18 guarantees these fields. A missing pillar stays null.
+  const daily = scoreDailyLife(p);
+  const walk = scoreWalk(p);
+  const green = scoreGreen(p);
+  const transit = scoreTransit(p);
+  const quiet = scoreQuiet(p);
+  const housing = scoreHousingAffordability(p);
   const centrality = scoreCentrality(p);
 
   const scored: Record<PersonalPillarKey, ScoredValue> = {
@@ -489,11 +299,6 @@ export function computeObjectivePillars(
     pillars[key] = finiteScore(s.score);
     coverage[key] = s.coverage;
     missingData.push(...s.missingInputs);
-    if (s.sourcesUsed.some((src) => src.startsWith('s_') && !src.includes('strict') && !src.includes('kalt'))) {
-      if (['s_walk', 's_green', 's_transit', 's_quiet', 's_center'].some((x) => s.sourcesUsed.includes(x))) {
-        proxiesUsed.push(key);
-      }
-    }
   }
 
   return {

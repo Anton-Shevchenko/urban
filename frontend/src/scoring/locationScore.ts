@@ -83,11 +83,6 @@ export function computePersonalMatchScore(
     housing_affordability: housing,
   };
 
-  // Legacy alias: housing_value → housing_affordability
-  if (weights.housing_value != null && weights.housing_affordability == null) {
-    weights.housing_affordability = weights.housing_value;
-  }
-
   let sum = 0;
   let totalW = 0;
   let covW = 0;

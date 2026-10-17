@@ -177,9 +177,7 @@ def location_premium_score(df: pd.DataFrame) -> pd.Series:
     central = _col(df, "s_center", 50.0).clip(0, 100)
 
     # Employment proximity — business / urban activity
-    if "s_business" in df.columns:
-        employ = _col(df, "s_business", 50.0).clip(0, 100)
-    elif "s_urban_activity" in df.columns:
+    if "s_urban_activity" in df.columns:
         employ = _col(df, "s_urban_activity", 50.0).clip(0, 100)
     else:
         activity = _col(df, "urban_activity")
@@ -235,8 +233,6 @@ def fair_rent_score(df: pd.DataFrame, *, city_type: str) -> pd.Series:
     living = _col(df, "s_living", 50.0).clip(0, 100)
     center = _col(df, "s_center", 50.0).clip(0, 100)
     walk = _col(df, "s_walk", 50.0).clip(0, 100)
-    if float(walk.max() - walk.min()) < 1 and "s_walking_quality" in df.columns:
-        walk = _col(df, "s_walking_quality", 50.0).clip(0, 100)
     transit = _col(df, "s_transit", 50.0).clip(0, 100)
     daily = _col(df, "s_daily_life", 50.0).clip(0, 100)
     green = _col(df, "s_green", 50.0).clip(0, 100)

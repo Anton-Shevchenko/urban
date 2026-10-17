@@ -85,16 +85,11 @@ def check_contract(
                 f"daily_life.category_weights.{group} must sum to 1.0, got {cat_total}"
             )
 
-    for alias, target in scoring["daily_life"]["group_aliases"].items():
-        if target not in groups:
-            raise SystemExit(
-                f"daily_life.group_aliases.{alias} points at unknown group {target}"
-            )
-    for alias, target in scoring["objective_weight_aliases"].items():
-        if target not in weights:
-            raise SystemExit(
-                f"objective_weight_aliases.{alias} points at unknown pillar {target}"
-            )
+    if scoring["daily_life"].get("group_aliases") or scoring.get("objective_weight_aliases"):
+        raise SystemExit(
+            "score aliases were removed in pipeline version 18; "
+            "delete daily_life.group_aliases and objective_weight_aliases"
+        )
 
     known = set(declared_keys(schema))
     for pattern in schema.get("patternProperties", {}):
@@ -141,9 +136,11 @@ def _check_metrics(metrics: dict[str, Any], schema: dict[str, Any]) -> None:
         score_key = metric.get("score_key")
         if score_key and score_key not in schema.get("properties", {}):
             raise SystemExit(f"metric {metric.get('id')} score_key {score_key} is not in the schema")
-        for alias_key in metric.get("alias_keys", []):
-            if alias_key not in schema.get("properties", {}):
-                raise SystemExit(f"metric {metric.get('id')} alias_key {alias_key} is not in the schema")
+        if metric.get("aliases") or metric.get("alias_keys"):
+            raise SystemExit(
+                f"metric {metric.get('id')} still declares aliases; "
+                "pipeline version 18 reads the canonical score_key only"
+            )
 
 
 def _matches_pattern(key: str, schema: dict[str, Any]) -> bool:
@@ -183,8 +180,6 @@ def metric_score_props(metrics: dict[str, Any]) -> dict[str, str]:
     for metric in [strip_comments(m) for m in metrics.get("metrics", [])]:
         key = metric["paint_key"] if metric.get("paint_key") else metric["score_key"]
         out[metric["id"]] = key
-        for alias in metric.get("aliases", []):
-            out[alias] = key
     return out
 
 
@@ -193,8 +188,6 @@ def metric_labels(metrics: dict[str, Any]) -> dict[str, str]:
     for metric in [strip_comments(m) for m in metrics.get("metrics", [])]:
         label = metric["label"]
         out[metric["id"]] = label
-        for alias in metric.get("aliases", []):
-            out[alias] = label
     return out
 
 
@@ -213,8 +206,6 @@ def metric_meta(metrics: dict[str, Any]) -> dict[str, Any]:
         if not meta:
             continue
         out[metric["id"]] = meta
-        for alias in metric.get("aliases", []):
-            out.setdefault(alias, meta)
     return out
 
 
@@ -253,13 +244,9 @@ def render_python(
         "",
         f"OBJECTIVE_WEIGHTS: dict[str, float] = {lit(scoring['objective_weights'])}",
         "",
-        f"OBJECTIVE_WEIGHT_ALIASES: dict[str, str] = {lit(scoring['objective_weight_aliases'])}",
-        "",
         f"INFORMATIONAL_PILLARS: dict[str, float] = {lit(strip_comments(scoring['informational_pillars']))}",
         "",
         f"DAILY_LIFE_GROUP_WEIGHTS: dict[str, float] = {lit(daily['group_weights'])}",
-        "",
-        f"DAILY_LIFE_GROUP_ALIASES: dict[str, str] = {lit(daily['group_aliases'])}",
         "",
         f"DAILY_LIFE_CATEGORY_WEIGHTS: dict[str, dict[str, float]] = {lit(daily['category_weights'])}",
         "",
@@ -399,11 +386,6 @@ def render_typescript(
         + _ts_flat_map(scoring["objective_weights"])
         + ";",
         "",
-        "/** Legacy pillar names still emitted by the pipeline. */",
-        "export const OBJECTIVE_WEIGHT_ALIASES: Record<string, ObjectivePillarKey> = "
-        + _ts_flat_string_map(scoring["objective_weight_aliases"])
-        + ";",
-        "",
         "/** Exported and shown in the UI, weighted 0 in the objective score. */",
         "export const INFORMATIONAL_PILLARS: Record<string, number> = "
         + _ts_flat_map(strip_comments(scoring["informational_pillars"]))
@@ -411,10 +393,6 @@ def render_typescript(
         "",
         "export const DAILY_LIFE_GROUP_WEIGHTS: Record<string, number> = "
         + _ts_flat_map(daily["group_weights"])
-        + ";",
-        "",
-        "export const DAILY_LIFE_GROUP_ALIASES: Record<string, string> = "
-        + _ts_flat_string_map(daily["group_aliases"])
         + ";",
         "",
         "export const DAILY_LIFE_CATEGORY_WEIGHTS: Record<string, Record<string, number>> = "
@@ -451,11 +429,6 @@ def render_typescript(
             for m in (strip_comments(x) for x in metrics.get("metrics", []))
             if m.get("kind") in {"pillar", "informational"}
         }
-        for metric in (strip_comments(x) for x in metrics.get("metrics", [])):
-            if metric.get("kind") not in {"pillar", "informational"}:
-                continue
-            for alias in metric.get("aliases", []):
-                pillar_labels[alias] = metric["label"]
         lines.extend(
             [
                 "export const SCORE_PROPS: Record<string, string> = "

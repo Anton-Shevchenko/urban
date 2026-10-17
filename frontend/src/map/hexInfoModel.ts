@@ -7,14 +7,14 @@ import { num } from '../scoring/num';
 import type { PersonalPillarKey, PipelinePoint, ScoringEngine } from '../scoring/types';
 
 /** Pillars from contracts/metrics.json `hex_fact_sheet.pillars`. */
-export const HEX_PILLAR_FACTS: { key: string; props: string[]; labelKey: string; scoreKey: PersonalPillarKey }[] = [
-  { key: 'daily_life', props: ['s_daily_life', 's_daily_needs'], labelKey: 'daily_life', scoreKey: 'daily_life' },
-  { key: 'walk', props: ['s_walk', 's_walking_quality'], labelKey: 'walk', scoreKey: 'walk' },
-  { key: 'green', props: ['s_green'], labelKey: 'green', scoreKey: 'green' },
-  { key: 'transit', props: ['s_transit', 's_transit_service'], labelKey: 'transit', scoreKey: 'transit' },
-  { key: 'quiet', props: ['s_quiet', 's_noise'], labelKey: 'quiet', scoreKey: 'quiet' },
-  { key: 'housing_value', props: ['s_housing_value', 's_housing_affordability'], labelKey: 'housing_value', scoreKey: 'housing_affordability' },
-  { key: 'center', props: ['s_center', 's_center_strict'], labelKey: 'centrality', scoreKey: 'centrality' },
+export const HEX_PILLAR_FACTS: { key: string; prop: string; labelKey: string; scoreKey: PersonalPillarKey }[] = [
+  { key: 'daily_life', prop: 's_daily_life', labelKey: 'daily_life', scoreKey: 'daily_life' },
+  { key: 'walk', prop: 's_walk', labelKey: 'walk', scoreKey: 'walk' },
+  { key: 'green', prop: 's_green', labelKey: 'green', scoreKey: 'green' },
+  { key: 'transit', prop: 's_transit', labelKey: 'transit', scoreKey: 'transit' },
+  { key: 'quiet', prop: 's_quiet', labelKey: 'quiet', scoreKey: 'quiet' },
+  { key: 'housing_affordability', prop: 's_housing_affordability', labelKey: 'housing_affordability', scoreKey: 'housing_affordability' },
+  { key: 'centrality', prop: 's_center', labelKey: 'centrality', scoreKey: 'centrality' },
 ];
 
 /** Walk-minute fields from contracts/metrics.json `hex_fact_sheet.walk_minutes`. */
@@ -103,14 +103,6 @@ export function mergeCityHexProps(
   return { ...(full.properties as Record<string, unknown>), ...snapshot };
 }
 
-function firstNumber(props: Record<string, unknown>, keys: string[]): number | null {
-  for (const key of keys) {
-    const v = num(props[key]);
-    if (v != null) return v;
-  }
-  return null;
-}
-
 /** 0 minutes means the amenity sits in the hex, not “none here”. */
 export function formatAmenityPresence(row: HexInfoWalkRow): string {
   if (row.isCenter) {
@@ -174,7 +166,7 @@ export function buildHexInfoModel(
       formatPriceLine('Kaufpreis', props.sale_eur_m2, props.sale_source, props.sale_as_of),
     ].filter((line): line is string => line != null),
     pillars: HEX_PILLAR_FACTS.map((row) => {
-      const fromProps = firstNumber(props, row.props);
+      const fromProps = num(props[row.prop]);
       const fromScore = result.pillars?.[row.scoreKey];
       const val = fromProps ?? (fromScore == null || !Number.isFinite(Number(fromScore)) ? null : Number(fromScore));
       return {

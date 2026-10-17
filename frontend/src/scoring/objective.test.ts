@@ -43,14 +43,15 @@ const fullPoint = {
   dn_sports_avail: 80,
   dn_playground_min: 5,
   dn_playground_avail: 100,
-  walking_quality_score: 60,
-  transit_service_score: 55,
-  s_green_strict: 50,
-  noise_db: 58,
+  s_daily_life: 72,
+  s_walk: 60,
+  s_green: 50,
+  s_transit: 55,
+  s_quiet: 40,
+  s_housing_affordability: 30,
+  s_center: 70,
   rent_eur_m2: 18,
   s_rent_relative_city: 40,
-  s_center: 70,
-  s_center_strict: 40,
 };
 
 describe('objective vs personal independence', () => {
@@ -83,10 +84,10 @@ describe('missing data', () => {
 
   it('null / empty pillars do not become zero scores', () => {
     const r = locationScore({
-      walking_quality_score: null,
-      transit_service_score: '',
-      noise_db: undefined,
-      rent_eur_m2: null,
+      s_walk: null,
+      s_transit: null,
+      s_quiet: undefined,
+      s_housing_affordability: null,
     });
     expect(r.pillars.walk).toBeNull();
     expect(r.pillars.transit).toBeNull();
@@ -96,11 +97,10 @@ describe('missing data', () => {
 
   it('partial data without daily_life yields no objective score (infra-only)', () => {
     const r = locationScore({
-      walking_quality_score: 70,
-      transit_service_score: 60,
-      noise_db: 55,
-      s_green_strict: 50,
-      // no rent, no daily life
+      s_walk: 70,
+      s_transit: 60,
+      s_quiet: 55,
+      s_green: 50,
     });
     // Objective is 100% daily_life — missing infra → no objective score.
     expect(r.objectiveScore).toBeNull();
@@ -142,17 +142,20 @@ describe('daily life aggregation', () => {
 describe('housing affordability', () => {
   it('does not blend walk/transit/daily into housing pillar', () => {
     const a = scoreHousingAffordability({
-      rent_eur_m2: 20,
+      s_housing_affordability: 40,
+      rent_eur_m2: 8,
       s_walk: 100,
       s_transit: 100,
       s_daily_life: 100,
     });
     const b = scoreHousingAffordability({
-      rent_eur_m2: 20,
+      s_housing_affordability: 40,
+      rent_eur_m2: 30,
       s_walk: 0,
       s_transit: 0,
       s_daily_life: 0,
     });
+    expect(a.score).toBe(40);
     expect(a.score).toBe(b.score);
   });
 });

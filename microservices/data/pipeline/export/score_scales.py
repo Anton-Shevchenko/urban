@@ -398,14 +398,14 @@ def living_score_composite(
     weights: dict[str, float] | None = None,
     *,
     daily_life: pd.Series | None = None,
-    walking_quality: pd.Series | None = None,
     transit: pd.Series | None = None,
     urban_form: pd.Series | None = None,
 ) -> pd.Series:
     """Objective Living Score (objective-v2).
 
     Weighted mean of known pillars only — no fillna(50), no city contrast stretch.
-    Missing pillars are omitted and weights renormalised per row.
+    Missing pillars are omitted and weights renormalised per row. Callers pass
+    canonical keys; unknown names are not substituted.
     """
     from pipeline import config
 
@@ -414,28 +414,15 @@ def living_score_composite(
         metrics = {}
         if daily_life is not None:
             metrics["daily_life"] = daily_life
-        if walking_quality is not None:
-            metrics["walk"] = walking_quality
-            metrics["walking_quality"] = walking_quality
         if transit is not None:
             metrics["transit"] = transit
         if urban_form is not None:
             metrics["centrality"] = urban_form
 
     keys = ["daily_life", "walk", "green", "transit", "quiet", "housing_affordability"]
-    alias = {
-        "walk": ("walk", "walking_quality"),
-        "quiet": ("quiet", "noise"),
-        "housing_affordability": ("housing_affordability", "housing_value", "price"),
-    }
     index = None
     for key in keys:
         series = metrics.get(key)
-        if series is None:
-            for alt in alias.get(key, ()):
-                if alt in metrics:
-                    series = metrics[alt]
-                    break
         if series is not None:
             index = series.index
             break
@@ -446,11 +433,6 @@ def living_score_composite(
     weight_sum = pd.Series(0.0, index=index)
     for key in keys:
         series = metrics.get(key)
-        if series is None:
-            for alt in alias.get(key, ()):
-                if alt in metrics:
-                    series = metrics[alt]
-                    break
         if series is None:
             continue
         ww = float(w.get(key, 0) or 0)

@@ -9,15 +9,9 @@
     "quiet": 0.0,
     "housing_affordability": 0.0
   },
-  "objective_weight_aliases": {
-    "walking_quality": "walk",
-    "noise": "quiet",
-    "housing_value": "housing_affordability"
-  },
   "informational_pillars": {
     "$comment": "Exported and shown in the UI but weighted 0 in the objective score.",
-    "centrality": 0.0,
-    "center": 0.0
+    "centrality": 0.0
   },
   "daily_life": {
     "group_weights": {
@@ -27,9 +21,6 @@
       "services": 0.15,
       "restaurants_cafes": 0.10,
       "leisure": 0.10
-    },
-    "group_aliases": {
-      "other": "leisure"
     },
     "category_weights": {
       "food": { "supermarket": 0.60, "market": 0.25, "bakery": 0.15 },

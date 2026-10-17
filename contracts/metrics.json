@@ -7,9 +7,9 @@
       "walk": "s_walk",
       "green": "s_green",
       "transit": "s_transit",
-      "center": "s_center",
+      "centrality": "s_center",
       "quiet": "s_quiet",
-      "housing_value": "s_housing_value"
+      "housing_affordability": "s_housing_affordability"
     },
     "walk_minutes": {
       "supermarket": "dn_supermarket_min",
@@ -156,7 +156,7 @@
       "func": "main",
       "wave": 5,
       "cache_file": "factor_walking_quality.parquet",
-      "required_cache": false
+      "required_cache": true
     },
     {
       "id": "urban_form",
@@ -199,8 +199,6 @@
       "kind": "pillar",
       "score_key": "s_daily_life",
       "label": "Infrastruktur",
-      "aliases": ["daily_needs"],
-      "alias_keys": ["s_daily_needs"],
       "type": "objective_positive",
       "factor": "daily_needs",
       "meta": { "source": "osm", "confidence": 0.75, "year": 2026 }
@@ -210,8 +208,6 @@
       "kind": "pillar",
       "score_key": "s_walk",
       "label": "Gehqualität",
-      "aliases": ["walking_quality"],
-      "alias_keys": ["s_walking_quality"],
       "type": "objective_positive",
       "factor": "walking_quality",
       "meta": { "source": "osm_roads+green+noise", "confidence": 0.55, "year": 2026 }
@@ -230,8 +226,6 @@
       "kind": "pillar",
       "score_key": "s_transit",
       "label": "ÖPNV",
-      "aliases": ["transit_service"],
-      "alias_keys": ["s_transit_service"],
       "type": "objective_positive",
       "factor": "transit_service",
       "meta": { "source": "gtfs_or_osm", "confidence": 0.6, "year": 2026 }
@@ -241,8 +235,6 @@
       "kind": "pillar",
       "score_key": "s_quiet",
       "label": "Ruhe",
-      "aliases": ["noise"],
-      "alias_keys": ["s_noise"],
       "type": "objective_positive",
       "factor": "noise",
       "meta": { "source": "osm_proxy", "confidence": 0.5, "year": 2026 }
@@ -253,8 +245,6 @@
       "score_key": "s_housing_affordability",
       "paint_key": "s_rent_kalt_benchmark",
       "label": "Wohnkosten",
-      "aliases": ["housing_value"],
-      "alias_keys": ["s_housing_value"],
       "type": "objective_positive",
       "factor": "rents",
       "meta": { "source": "mixed", "confidence": 0.5, "year": 2026 }
@@ -264,7 +254,6 @@
       "kind": "informational",
       "score_key": "s_center",
       "label": "Zentralität",
-      "aliases": ["center"],
       "type": "objective_positive",
       "factor": "center",
       "meta": { "source": "ors_or_osm", "confidence": 0.65, "year": 2026 }

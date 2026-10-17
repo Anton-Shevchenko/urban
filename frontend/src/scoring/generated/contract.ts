@@ -10,7 +10,7 @@ export type ObjectivePillarKey =
   | 'housing_affordability';
 
 export const SCORE_METHOD_VERSION = 'objective-v2' as const;
-export const PIPELINE_VERSION = 17 as const;
+export const PIPELINE_VERSION = 18 as const;
 
 export const OBJECTIVE_PILLAR_KEYS: ObjectivePillarKey[] = [
   'daily_life',
@@ -30,17 +30,9 @@ export const OBJECTIVE_WEIGHTS: Record<ObjectivePillarKey, number> = {
   housing_affordability: 0,
 };
 
-/** Legacy pillar names still emitted by the pipeline. */
-export const OBJECTIVE_WEIGHT_ALIASES: Record<string, ObjectivePillarKey> = {
-  walking_quality: 'walk',
-  noise: 'quiet',
-  housing_value: 'housing_affordability',
-};
-
 /** Exported and shown in the UI, weighted 0 in the objective score. */
 export const INFORMATIONAL_PILLARS: Record<string, number> = {
   centrality: 0,
-  center: 0,
 };
 
 export const DAILY_LIFE_GROUP_WEIGHTS: Record<string, number> = {
@@ -50,10 +42,6 @@ export const DAILY_LIFE_GROUP_WEIGHTS: Record<string, number> = {
   services: 0.15,
   restaurants_cafes: 0.1,
   leisure: 0.1,
-};
-
-export const DAILY_LIFE_GROUP_ALIASES: Record<string, string> = {
-  other: 'leisure',
 };
 
 export const DAILY_LIFE_CATEGORY_WEIGHTS: Record<string, Record<string, number>> = {
@@ -75,32 +63,18 @@ export type HexProperties = {
   h3?: string;
   /** Objective Living Score (objective-v2) */
   s_living?: number | null;
-  /** Alias of s_living */
-  s_objective?: number | null;
   s_daily_life?: number | null;
-  /** Legacy alias of s_daily_life */
-  s_daily_needs?: number | null;
   s_walk?: number | null;
-  /** Legacy alias of s_walk */
-  s_walking_quality?: number | null;
   s_transit?: number | null;
-  /** Legacy alias of s_transit */
-  s_transit_service?: number | null;
   s_green?: number | null;
   s_green_strict?: number | null;
   s_quiet?: number | null;
-  /** Quiet-is-high alias of s_quiet */
-  s_noise?: number | null;
   s_housing_affordability?: number | null;
-  /** Alias of s_housing_affordability */
-  s_housing_value?: number | null;
   s_urban_form?: number | null;
   /** City-normalised centrality (informational, weight 0) */
   s_center?: number | null;
   s_center_strict?: number | null;
   s_urban_activity?: number | null;
-  /** Alias of s_urban_activity */
-  s_business?: number | null;
   s_transport?: number | null;
   s_heat?: number | null;
   s_traffic_safety?: number | null;
@@ -210,24 +184,17 @@ export type HexProperties = {
 export const DECLARED_HEX_PROPERTIES: string[] = [
   'h3',
   's_living',
-  's_objective',
   's_daily_life',
-  's_daily_needs',
   's_walk',
-  's_walking_quality',
   's_transit',
-  's_transit_service',
   's_green',
   's_green_strict',
   's_quiet',
-  's_noise',
   's_housing_affordability',
-  's_housing_value',
   's_urban_form',
   's_center',
   's_center_strict',
   's_urban_activity',
-  's_business',
   's_transport',
   's_heat',
   's_traffic_safety',
@@ -327,17 +294,14 @@ export const REQUIRED_HEX_PROPERTIES: string[] = [
   's_living',
   's_daily_life',
   's_walk',
-  's_walking_quality',
   's_transit',
   's_green',
   's_quiet',
-  's_housing_value',
+  's_housing_affordability',
   's_urban_form',
   's_center',
   's_urban_activity',
-  's_business',
   's_transport',
-  's_noise',
   'center_min',
   'urban_activity',
   'business_count',
@@ -350,22 +314,14 @@ export const REQUIRED_HEX_PROPERTIES: string[] = [
 export const FRONTEND_HEX_PROPERTIES: string[] = [
   'h3',
   's_living',
-  's_objective',
   's_daily_life',
-  's_daily_needs',
   's_walk',
-  's_walking_quality',
   's_transit',
-  's_transit_service',
   's_green',
-  's_green_strict',
   's_quiet',
-  's_noise',
   's_housing_affordability',
-  's_housing_value',
   's_urban_form',
   's_center',
-  's_center_strict',
   's_urban_activity',
   's_heat',
   's_housing',
@@ -394,18 +350,12 @@ export const FRONTEND_HEX_PROPERTIES: string[] = [
 export const SCORE_PROPS: Record<string, string> = {
   living: 's_living',
   daily_life: 's_daily_life',
-  daily_needs: 's_daily_life',
   walk: 's_walk',
-  walking_quality: 's_walk',
   green: 's_green',
   transit: 's_transit',
-  transit_service: 's_transit',
   quiet: 's_quiet',
-  noise: 's_quiet',
   housing_affordability: 's_rent_kalt_benchmark',
-  housing_value: 's_rent_kalt_benchmark',
   centrality: 's_center',
-  center: 's_center',
   urban_form: 's_urban_form',
   urban_activity: 's_urban_activity',
   heat: 's_heat',
@@ -419,18 +369,12 @@ export const SCORE_PROPS: Record<string, string> = {
 export const METRIC_LABELS: Record<string, string> = {
   living: 'Infrastruktur',
   daily_life: 'Infrastruktur',
-  daily_needs: 'Infrastruktur',
   walk: 'Gehqualität',
-  walking_quality: 'Gehqualität',
   green: 'Grün',
   transit: 'ÖPNV',
-  transit_service: 'ÖPNV',
   quiet: 'Ruhe',
-  noise: 'Ruhe',
   housing_affordability: 'Wohnkosten',
-  housing_value: 'Wohnkosten',
   centrality: 'Zentralität',
-  center: 'Zentralität',
   urban_form: 'Stadtform',
   urban_activity: 'Aktivität',
   heat: 'Hitze',
@@ -449,12 +393,6 @@ export const PILLAR_LABELS: Record<string, string> = {
   quiet: 'Ruhe',
   housing_affordability: 'Wohnkosten',
   centrality: 'Zentralität',
-  daily_needs: 'Infrastruktur',
-  walking_quality: 'Gehqualität',
-  transit_service: 'ÖPNV',
-  noise: 'Ruhe',
-  housing_value: 'Wohnkosten',
-  center: 'Zentralität',
 };
 
 export const MAP_VIEW_METRICS: string[] = [

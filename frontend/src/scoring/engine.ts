@@ -201,7 +201,7 @@ function parseMapMetricMode(raw: string | null | undefined): MapMetricMode {
   if (MAP_VIEW_METRICS.includes(raw)) return raw as MapMetricMode;
   // Legacy diagnose / factor map views
   if (PILLAR_KEYS.includes(raw as typeof PILLAR_KEYS[number]) || SCORE_PROPS[raw]) {
-    return `pillar:${raw === 'housing_value' ? 'housing_affordability' : raw}`;
+    return `pillar:${raw}`;
   }
   return 'objective';
 }
@@ -286,17 +286,11 @@ export function createScoringEngine(
     if (PILLAR_KEYS.includes(key as typeof PILLAR_KEYS[number])) {
       return pillarScores(p, groupMultipliers, affordabilityFocus)[key] ?? null;
     }
-    if (key === 'housing_value') {
-      return pillarScores(p, groupMultipliers, affordabilityFocus).housing_affordability ?? null;
-    }
-    if (key === 'daily_needs' || key === 'daily_life') {
+    if (key === 'daily_life') {
       return pillarScores(p, groupMultipliers, affordabilityFocus).daily_life ?? null;
     }
-    if (key === 'transit_service' || key === 'transit') {
+    if (key === 'transit') {
       return pillarScores(p, groupMultipliers, affordabilityFocus).transit ?? null;
-    }
-    if (key === 'walking_quality') {
-      return pillarScores(p, groupMultipliers, affordabilityFocus).walk ?? null;
     }
     if (key === 'urban_form') return num(p.s_urban_form);
     if (key === 'price') {
@@ -506,8 +500,7 @@ export function createScoringEngine(
     if (PILLAR_KEYS.includes(key as typeof PILLAR_KEYS[number]) || SCORE_PROPS[key]) {
       ctx._diagnoseKey = level > 0 ? key : null;
       if (level > 0) {
-        const pillarKey = key === 'housing_value' ? 'housing_affordability' : key;
-        ctx.mapMetricMode = `pillar:${pillarKey}`;
+        ctx.mapMetricMode = `pillar:${key}`;
       }
     }
     return rebuildCityStats();
@@ -575,7 +568,7 @@ export function createContextFromFeatures(
     .map((p) => num(p.noise_db))
     .filter((v): v is number => v != null);
   const noiseScores = propsList
-    .map((p) => num(p.s_noise))
+    .map((p) => num(p.s_quiet))
     .filter((v): v is number => v != null);
   const noiseSpread =
     noiseDbs.length >= 2

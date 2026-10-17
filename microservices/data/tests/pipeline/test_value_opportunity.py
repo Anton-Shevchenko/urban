@@ -33,7 +33,7 @@ def _fake_city(n: int = 80) -> pd.DataFrame:
             "s_daily_life": living * 0.95,
             "s_green": 50 + rng.normal(0, 10, n),
             "s_walk": living * 0.8,
-            "s_business": living * 0.7,
+            "s_urban_activity": living * 0.7,
             "dl_education": living * 0.6,
             "dl_restaurants_cafes": living * 0.5,
             "dn_school_avail": np.where(res >= 0.3, 90, 10),
@@ -103,7 +103,7 @@ def test_location_premium_shields_central_core():
     base.loc[i, "s_living"] = 85
     base.loc[i, "s_center"] = 95
     base.loc[i, "s_center_strict"] = 95
-    base.loc[i, "s_business"] = 90
+    base.loc[i, "s_urban_activity"] = 90
     base.loc[i, "dl_education"] = 90
     base.loc[i, "dl_restaurants_cafes"] = 90
     out = compute_value_opportunity(base, city_type="METROPOLIS", neighbor_k=1)
