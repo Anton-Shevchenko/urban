@@ -14,7 +14,7 @@ help:
 	@echo "  make start                    — API + frontend + Go chat stack (docker compose)"
 	@echo "  make ollama                   — pull llama3.2:3b into native Ollama on the host"
 	@echo "  make stop                     — зупинити контейнери"
-	@echo "  make clear-cache              — скинути pipeline / Vite кеш"
+	@echo "  make clear-cache              — скинути pipeline / Vite кеш і міста на карті"
 	@echo "  make generate CITY=Hamburg    — згенерувати кеш для міста"
 	@echo "  make generate-all             — перегенерувати всі міста з data/cities/"
 	@echo "  make proto                    — regenerate Go gRPC stubs"
@@ -45,9 +45,18 @@ stop стоп:
 clear-cache скинути-кеш:
 	rm -rf microservices/data/data/cache/*
 	rm -rf microservices/data/data/cities/*/cache
+	rm -f microservices/data/data/cities/*/hexes.geojson \
+		microservices/data/data/cities/*/cycleways.geojson
+	rm -f microservices/data/data/wohnindex.db \
+		microservices/data/data/wohnindex.db-wal \
+		microservices/data/data/wohnindex.db-shm \
+		microservices/data/data/*.db-journal
 	rm -rf frontend/node_modules/.vite
 	find . -type d -name __pycache__ -not -path './.venv/*' -exec rm -rf {} + 2>/dev/null || true
-	@echo "Кеш очищено (data-service cache, Vite, __pycache__)"
+	@if ids=$$($(COMPOSE) ps -q api hex-svc 2>/dev/null) && [ -n "$$ids" ]; then \
+		$(COMPOSE) restart api hex-svc; \
+	fi
+	@echo "Кеш і згенеровані міста очищено (SQLite, hexes.geojson, pipeline, Vite, __pycache__)"
 
 generate генерувати:
 ifeq ($(strip $(CITY)),)

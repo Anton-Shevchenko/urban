@@ -215,17 +215,17 @@ def status(slug: str) -> dict:
 
 @app.get("/api/city/{slug}.geojson")
 def city_geojson(slug: str):
-    text = db.get_city_geojson_text(slug)
-    if text is not None and db.is_db_city_current(slug):
-        return Response(content=text, media_type="application/geo+json")
     path = _city_dir(slug) / "hexes.geojson"
     if path.exists():
-        # Backfill DB while serving from disk.
-        try:
-            db.upsert_city_from_dir(_city_dir(slug))
-        except Exception:  # noqa: BLE001
-            traceback.print_exc()
+        # Disk wins after a local re-export; the SQLite blob can lag even when
+        # pipeline_version is unchanged (e.g. a new overlay column).
+        if db.disk_geojson_is_newer(slug, _city_dir(slug)):
+            try:
+                db.upsert_city_from_dir(_city_dir(slug))
+            except Exception:  # noqa: BLE001
+                traceback.print_exc()
         return FileResponse(path, media_type="application/geo+json")
+    text = db.get_city_geojson_text(slug)
     if text is not None:
         return Response(content=text, media_type="application/geo+json")
     raise HTTPException(status_code=404, detail="not generated")

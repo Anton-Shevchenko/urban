@@ -195,6 +195,37 @@ def get_city_geojson_text(slug: str) -> str | None:
     return row["geojson"] if row else None
 
 
+def disk_geojson_is_newer(slug: str, city_dir: Path) -> bool:
+    """True when hexes.geojson on disk is newer than the SQLite row.
+
+    A re-export can keep the same pipeline_version, so version checks alone
+    would keep serving a stale blob from the DB.
+    """
+    path = city_dir / "hexes.geojson"
+    if not path.exists():
+        return False
+    init_db()
+    with _lock:
+        conn = connect()
+        try:
+            row = conn.execute(
+                "SELECT updated_at FROM cities WHERE slug = ?",
+                (slug,),
+            ).fetchone()
+        finally:
+            conn.close()
+    if row is None:
+        return True
+    try:
+        db_ts = datetime.fromisoformat(str(row["updated_at"]))
+        if db_ts.tzinfo is None:
+            db_ts = db_ts.replace(tzinfo=UTC)
+    except ValueError:
+        return True
+    disk_ts = datetime.fromtimestamp(path.stat().st_mtime, tz=UTC)
+    return disk_ts > db_ts
+
+
 def is_db_city_current(slug: str) -> bool:
     meta = get_city_meta(slug)
     if meta is None:

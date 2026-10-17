@@ -217,6 +217,56 @@ def test_city_geojson_from_db(api):
     assert resp.json() == payload
 
 
+def test_city_geojson_prefers_newer_disk_over_stale_db(api):
+    import os
+    import time
+
+    client, _, cities, db = api
+    city = cities / "muenchen"
+    city.mkdir()
+    stale = {
+        "type": "FeatureCollection",
+        "features": [
+            {
+                "type": "Feature",
+                "geometry": {"type": "Polygon", "coordinates": []},
+                "properties": {"h3": "a", "s_living": 1},
+            }
+        ],
+    }
+    fresh = {
+        "type": "FeatureCollection",
+        "meta": {"slug": "muenchen", "name": "München", "pipeline_version": 10_000},
+        "features": [
+            {
+                "type": "Feature",
+                "geometry": {"type": "Polygon", "coordinates": []},
+                "properties": {"h3": "a", "s_living": 1, "s_walkability": 77.5},
+            }
+        ],
+    }
+    db.upsert_city(
+        "muenchen",
+        "München",
+        {"slug": "muenchen", "name": "München", "pipeline_version": 10_000, "noise_db_spread": 4.0},
+        json.dumps(stale),
+    )
+    geo = city / "hexes.geojson"
+    geo.write_text(json.dumps(fresh), encoding="utf-8")
+    (city / "meta.json").write_text(
+        json.dumps({"slug": "muenchen", "name": "München", "pipeline_version": 10_000}),
+        encoding="utf-8",
+    )
+    # Guarantee the file mtime is after the SQLite updated_at row.
+    later = time.time() + 5
+    os.utime(geo, (later, later))
+
+    resp = client.get("/api/city/muenchen.geojson")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["features"][0]["properties"]["s_walkability"] == 77.5
+
+
 def test_city_cycleways_from_disk(api):
     client, _, cities, _ = api
     city = cities / "muenchen"
