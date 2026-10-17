@@ -18,6 +18,12 @@
         "dn_school_min": 8,
         "dn_doctor_min": 12,
         "rent_eur_m2": 14.2,
+        "rent_source": "Zensus 2022",
+        "rent_as_of": "2026-08",
+        "asking_rent_eur_m2": 18.4,
+        "asking_rent_source": "ImmoScout24",
+        "sale_eur_m2": 5251,
+        "sale_source": "GREIX",
         "voi_class": "hidden_gem",
         "voi_explain": "gute Lage, moderate Miete"
       }

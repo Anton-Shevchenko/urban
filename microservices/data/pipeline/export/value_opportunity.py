@@ -524,6 +524,10 @@ _UNOBSERVED_PRICE_COLS = (
     "voi_adjusted_price_gap",
     "s_value_opportunity",
     "s_value_opportunity_raw",
+    "voi_gem_strength",
+    "voi_local_advantage",
+    "voi_local_value_advantage",
+    "voi_local_delta",
 )
 
 
@@ -539,8 +543,9 @@ def _blank_unobserved_voi(out: pd.DataFrame) -> pd.DataFrame:
     for column in _UNOBSERVED_PRICE_COLS:
         if column in out.columns:
             out.loc[missing, column] = np.nan
-    if "voi_class" in out.columns:
-        out.loc[missing, "voi_class"] = None
+    for column in ("voi_class", "voi_confidence"):
+        if column in out.columns:
+            out.loc[missing, column] = None
     if "voi_explain" in out.columns:
         out.loc[missing, "voi_explain"] = ""
     if "voi_highlight" in out.columns:

@@ -340,6 +340,16 @@ func factSheet(slug, name, h3 string, props map[string]any) *hexv1.Hex {
 	if v, ok := asFloat(props["rent_eur_m2"]); ok {
 		h.RentEurM2 = &v
 	}
+	if v, ok := asFloat(props["asking_rent_eur_m2"]); ok {
+		h.AskingRentEurM2 = &v
+	}
+	if v, ok := asFloat(props["sale_eur_m2"]); ok {
+		h.SaleEurM2 = &v
+	}
+	h.RentSource = stringProp(props, "rent_source")
+	h.RentAsOf = stringProp(props, "rent_as_of")
+	h.AskingRentSource = stringProp(props, "asking_rent_source")
+	h.SaleSource = stringProp(props, "sale_source")
 	h.VoiClass = stringProp(props, "voi_class")
 	h.VoiExplain = stringProp(props, "voi_explain")
 	return h

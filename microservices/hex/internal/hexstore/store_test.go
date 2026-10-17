@@ -56,6 +56,15 @@ func TestGetMapsContractProperties(t *testing.T) {
 	if h.GetRentEurM2() != 14.2 {
 		t.Fatalf("rent %v", h.GetRentEurM2())
 	}
+	if h.RentSource != "Zensus 2022" || h.RentAsOf != "2026-08" {
+		t.Fatalf("rent provenance %q %q", h.RentSource, h.RentAsOf)
+	}
+	if h.GetAskingRentEurM2() != 18.4 || h.AskingRentSource != "ImmoScout24" {
+		t.Fatalf("asking rent %v %q", h.GetAskingRentEurM2(), h.AskingRentSource)
+	}
+	if h.GetSaleEurM2() != 5251 || h.SaleSource != "GREIX" {
+		t.Fatalf("sale %v %q", h.GetSaleEurM2(), h.SaleSource)
+	}
 	if h.VoiClass != "hidden_gem" {
 		t.Fatalf("voi class %q", h.VoiClass)
 	}
