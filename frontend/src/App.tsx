@@ -63,6 +63,7 @@ function MapAppShell({
           onClose={togglePanel}
           cityLabel={chrome.cityName}
           hexSummary={chrome.hexSummary}
+          cityType={chrome.cityType}
         />
       ) : (
         <button

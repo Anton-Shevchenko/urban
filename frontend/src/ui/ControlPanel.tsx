@@ -7,9 +7,10 @@ type Props = {
   onClose: () => void;
   cityLabel: string;
   hexSummary: string | null;
+  cityType: string | null;
 };
 
-export function ControlPanel({ onClose, cityLabel, hexSummary }: Props) {
+export function ControlPanel({ onClose, cityLabel, hexSummary, cityType }: Props) {
   const { meta, features, hasRent, searchStatus, searching, runSearch } = useCityData();
   const {
     desiredAreaM2,
@@ -68,8 +69,6 @@ export function ControlPanel({ onClose, cityLabel, hexSummary }: Props) {
     const input = form.elements.namedItem('q') as HTMLInputElement;
     runSearch(input.value);
   };
-
-  const cityType = (meta as { city_type?: string }).city_type;
 
   return (
     <aside id="panel" aria-label="Steuerung">

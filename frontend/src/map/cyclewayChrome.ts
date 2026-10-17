@@ -1,6 +1,7 @@
 export type HexGridMeta = {
   count?: number | null;
   h3_res?: number | null;
+  city_type?: string | null;
 };
 
 /** Footer line for a real hex grid. Missing resolution or an empty grid stays hidden. */
@@ -20,15 +21,17 @@ export function displayCityChrome(input: {
   cyclewaySlug: string | null;
   meta: HexGridMeta;
   featureCount: number;
-}): { cityName: string; hexSummary: string | null } {
+}): { cityName: string; hexSummary: string | null; cityType: string | null } {
   const cyclewayActive = input.mapView === 'cycleways' && Boolean(input.cyclewayName);
   const cityName = cyclewayActive && input.cyclewayName
     ? input.cyclewayName
     : input.wohnindexName;
-  const ownsGrid = !cyclewayActive
+  const ownsLoadedCity = !cyclewayActive
     || (input.cyclewaySlug != null && input.cyclewaySlug === input.wohnindexSlug);
+  const cityType = ownsLoadedCity ? (input.meta.city_type?.trim() || null) : null;
   return {
     cityName,
-    hexSummary: ownsGrid ? hexGridSummary(input.meta, input.featureCount) : null,
+    hexSummary: ownsLoadedCity ? hexGridSummary(input.meta, input.featureCount) : null,
+    cityType,
   };
 }

@@ -18,9 +18,9 @@ describe('hexGridSummary', () => {
 });
 
 describe('displayCityChrome', () => {
-  const muenchen = { count: 1, h3_res: 9 as number | undefined };
+  const muenchen = { count: 1, h3_res: 9 as number | undefined, city_type: 'METROPOLIS' };
 
-  it('names the selected cycleway city and hides another city’s hex grid', () => {
+  it('names the selected cycleway city and hides another city’s hex grid and type', () => {
     const chrome = displayCityChrome({
       mapView: 'cycleways',
       wohnindexName: 'München',
@@ -30,7 +30,7 @@ describe('displayCityChrome', () => {
       meta: muenchen,
       featureCount: 1,
     });
-    expect(chrome).toEqual({ cityName: 'Freising', hexSummary: null });
+    expect(chrome).toEqual({ cityName: 'Freising', hexSummary: null, cityType: null });
   });
 
   it('keeps the hex line when the cycleway city is the loaded grid', () => {
@@ -44,6 +44,7 @@ describe('displayCityChrome', () => {
       featureCount: 1,
     });
     expect(chrome.hexSummary).toBe('1 Hexagone · H3 res 9');
+    expect(chrome.cityType).toBe('METROPOLIS');
   });
 
   it('returns to the Wohnindex city outside the cycleway view', () => {
@@ -58,6 +59,7 @@ describe('displayCityChrome', () => {
     });
     expect(chrome.cityName).toBe('München');
     expect(chrome.hexSummary).toBe('1 Hexagone · H3 res 9');
+    expect(chrome.cityType).toBe('METROPOLIS');
   });
 });
 
