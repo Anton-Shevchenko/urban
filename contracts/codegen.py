@@ -428,7 +428,7 @@ def render_typescript(
         "/** Properties written by the pipeline into hexes.geojson features. */",
         "export type HexProperties = {",
         "\n".join(prop_lines),
-        "  /** dn_* / dl_* / center_min_* / wq_* / uf_* and future additions. */",
+        "  /** dn_* / dl_* / center_min_* / wq_* / uf_* / wb_* and future additions. */",
         "  [key: string]: unknown;",
         "};",
         "",

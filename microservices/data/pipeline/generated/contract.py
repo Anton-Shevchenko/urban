@@ -36,7 +36,7 @@ DAILY_LIFE_CATEGORY_WEIGHTS: dict[str, dict[str, float]] = {   'food': {'superma
     'restaurants_cafes': {'restaurant': 0.6, 'cafe': 0.4},
     'leisure': {'sports': 0.6, 'playground': 0.4}}
 
-WALK_MINUTE_BANDS: dict[str, list[list[float]]] = {'default': [[0, 100], [5, 100], [10, 70], [15, 30], [20, 0]]}
+WALK_MINUTE_BANDS: dict[str, list[list[float]]] = {'default': [[0, 100], [1, 88], [3, 70], [5, 52], [8, 32], [12, 15], [16, 5], [20, 0]]}
 
 HEX_PROPERTIES_SCHEMA: dict[str, Any] = {   '$schema': 'https://json-schema.org/draft/2020-12/schema',
     '$id': 'https://wohnindex.local/contracts/hex-properties.schema.json',
@@ -109,6 +109,12 @@ HEX_PROPERTIES_SCHEMA: dict[str, Any] = {   '$schema': 'https://json-schema.org/
                       's_cycleways': {   '$ref': '#/$defs/score',
                                          'description': 'Dedicated/separated cycleways overlay '
                                                         '— not part of Living Score'},
+                      's_walkability': {   '$ref': '#/$defs/score',
+                                           'description': 'Built-form walkability '
+                                                          '(connectivity, transit proximity, '
+                                                          'land-use mix, density). Not '
+                                                          'Gehqualität and not part of Living '
+                                                          'Score.'},
                       'cycleway_length_m': {'$ref': '#/$defs/nullableNumber'},
                       'nearest_cycleway_m': {'$ref': '#/$defs/nullableNumber'},
                       'cycleway_km_per_km2': {'$ref': '#/$defs/nullableNumber'},
@@ -228,7 +234,10 @@ HEX_PROPERTIES_SCHEMA: dict[str, Any] = {   '$schema': 'https://json-schema.org/
                                                  'description': 'Walk minutes to a named '
                                                                 'centre anchor'},
                              '^wq_': {'$ref': '#/$defs/nullableNumber'},
-                             '^uf_': {'$ref': '#/$defs/nullableNumber'}},
+                             '^uf_': {'$ref': '#/$defs/nullableNumber'},
+                             '^wb_': {   '$ref': '#/$defs/nullableNumber',
+                                         'description': 'Walkability component: connectivity, '
+                                                        'transit, diversity, density'}},
     'x-consumers': {   'go-hex-svc': [   'h3',
                                          's_living',
                                          's_daily_life',
@@ -246,6 +255,12 @@ HEX_PROPERTIES_SCHEMA: dict[str, Any] = {   '$schema': 'https://json-schema.org/
                                          'dn_doctor_min',
                                          'dn_playground_min',
                                          'rent_eur_m2',
+                                         'rent_source',
+                                         'rent_as_of',
+                                         'asking_rent_eur_m2',
+                                         'asking_rent_source',
+                                         'sale_eur_m2',
+                                         'sale_source',
                                          'voi_class',
                                          'voi_explain'],
                        'frontend-scoring': [   'h3',
@@ -272,6 +287,7 @@ HEX_PROPERTIES_SCHEMA: dict[str, Any] = {   '$schema': 'https://json-schema.org/
                                                's_density',
                                                's_traffic_safety',
                                                's_cycleways',
+                                               's_walkability',
                                                'nearest_cycleway_m',
                                                'cycleway_km_per_km2',
                                                's_rent_relative_city',
@@ -346,6 +362,7 @@ DECLARED_HEX_PROPERTIES: tuple[str, ...] = (   'h3',
     's_housing',
     's_density',
     's_cycleways',
+    's_walkability',
     'cycleway_length_m',
     'nearest_cycleway_m',
     'cycleway_km_per_km2',
@@ -449,6 +466,12 @@ CONSUMER_HEX_PROPERTIES: dict[str, tuple[str, ...]] = {   'go-hex-svc': (   'h3'
                       'dn_doctor_min',
                       'dn_playground_min',
                       'rent_eur_m2',
+                      'rent_source',
+                      'rent_as_of',
+                      'asking_rent_eur_m2',
+                      'asking_rent_source',
+                      'sale_eur_m2',
+                      'sale_source',
                       'voi_class',
                       'voi_explain'),
     'frontend-scoring': (   'h3',
@@ -475,6 +498,7 @@ CONSUMER_HEX_PROPERTIES: dict[str, tuple[str, ...]] = {   'go-hex-svc': (   'h3'
                             's_density',
                             's_traffic_safety',
                             's_cycleways',
+                            's_walkability',
                             'nearest_cycleway_m',
                             'cycleway_km_per_km2',
                             's_rent_relative_city',
@@ -670,7 +694,8 @@ METRIC_SCORE_PROPS: dict[str, str] = {   'living': 's_living',
     'housing': 's_housing',
     'density': 's_density',
     'price': 's_rent_relative_city',
-    'cycleways': 's_cycleways'}
+    'cycleways': 's_cycleways',
+    'walkability': 's_walkability'}
 
 METRIC_LABELS: dict[str, str] = {   'living': 'Infrastruktur',
     'daily_life': 'Infrastruktur',
@@ -693,7 +718,8 @@ METRIC_LABELS: dict[str, str] = {   'living': 'Infrastruktur',
     'housing': 'Wohnalter',
     'density': 'Dichte',
     'price': 'Kaltmiete',
-    'cycleways': 'Radwege'}
+    'cycleways': 'Radwege',
+    'walkability': 'Walkability'}
 
 METRIC_TYPES: dict[str, str] = {   'living': 'objective_positive',
     'daily_life': 'objective_positive',
@@ -710,7 +736,8 @@ METRIC_TYPES: dict[str, str] = {   'living': 'objective_positive',
     'housing': 'preference',
     'density': 'preference',
     'price': 'objective_positive',
-    'cycleways': 'objective_positive'}
+    'cycleways': 'objective_positive',
+    'walkability': 'objective_positive'}
 
 METRIC_META: dict[str, Any] = {   'living': {   'source': 'composite',
                   'confidence': 0.7,
@@ -751,9 +778,16 @@ METRIC_META: dict[str, Any] = {   'living': {   'source': 'composite',
                      'confidence': 0.7,
                      'year': 2026,
                      'note': 'Nur baulich getrennte Radwege (highway=cycleway, '
-                             'cycleway=track). Kein Radfahrstreifen.'}}
+                             'cycleway=track). Kein Radfahrstreifen.'},
+    'walkability': {   'source': 'intersection_density+landuse+transit_distance+population',
+                       'confidence': 0.55,
+                       'year': 2026,
+                       'note': 'EPA National Walkability Index shape: connectivity 0.34, '
+                               'transit proximity 0.33, land-use diversity 0.23, gross density '
+                               '0.10. Green/park proximity is a recreational floor so parks '
+                               'are not painted poor. Not Gehqualität.'}}
 
-MAP_VIEW_METRICS: tuple[str, ...] = ('price', 'cycleways')
+MAP_VIEW_METRICS: tuple[str, ...] = ('price', 'cycleways', 'walkability')
 
 HEX_PILLAR_KEYS: dict[str, str] = {   'daily_life': 's_daily_life',
     'walk': 's_walk',
@@ -771,4 +805,14 @@ HEX_WALK_MINUTE_KEYS: dict[str, str] = {   'supermarket': 'dn_supermarket_min',
     'playground': 'dn_playground_min',
     'center': 'center_min'}
 
-HEX_SCALAR_KEYS: tuple[str, ...] = ('h3', 's_living', 'rent_eur_m2', 'voi_class', 'voi_explain')
+HEX_SCALAR_KEYS: tuple[str, ...] = (   'h3',
+    's_living',
+    'rent_eur_m2',
+    'rent_source',
+    'rent_as_of',
+    'asking_rent_eur_m2',
+    'asking_rent_source',
+    'sale_eur_m2',
+    'sale_source',
+    'voi_class',
+    'voi_explain')

@@ -75,18 +75,24 @@ func (x *GetHexRequest) GetH3() string {
 
 // Compact fact sheet for one H3 cell — not the full GeoJSON property bag.
 type Hex struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	H3            string                 `protobuf:"bytes,1,opt,name=h3,proto3" json:"h3,omitempty"`
-	CitySlug      string                 `protobuf:"bytes,2,opt,name=city_slug,json=citySlug,proto3" json:"city_slug,omitempty"`
-	CityName      string                 `protobuf:"bytes,3,opt,name=city_name,json=cityName,proto3" json:"city_name,omitempty"`
-	LivingScore   *float64               `protobuf:"fixed64,4,opt,name=living_score,json=livingScore,proto3,oneof" json:"living_score,omitempty"`
-	Pillars       map[string]float64     `protobuf:"bytes,5,rep,name=pillars,proto3" json:"pillars,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"fixed64,2,opt,name=value"`
-	WalkMinutes   map[string]float64     `protobuf:"bytes,6,rep,name=walk_minutes,json=walkMinutes,proto3" json:"walk_minutes,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"fixed64,2,opt,name=value"`
-	RentEurM2     *float64               `protobuf:"fixed64,7,opt,name=rent_eur_m2,json=rentEurM2,proto3,oneof" json:"rent_eur_m2,omitempty"`
-	VoiClass      string                 `protobuf:"bytes,8,opt,name=voi_class,json=voiClass,proto3" json:"voi_class,omitempty"`
-	VoiExplain    string                 `protobuf:"bytes,9,opt,name=voi_explain,json=voiExplain,proto3" json:"voi_explain,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	H3               string                 `protobuf:"bytes,1,opt,name=h3,proto3" json:"h3,omitempty"`
+	CitySlug         string                 `protobuf:"bytes,2,opt,name=city_slug,json=citySlug,proto3" json:"city_slug,omitempty"`
+	CityName         string                 `protobuf:"bytes,3,opt,name=city_name,json=cityName,proto3" json:"city_name,omitempty"`
+	LivingScore      *float64               `protobuf:"fixed64,4,opt,name=living_score,json=livingScore,proto3,oneof" json:"living_score,omitempty"`
+	Pillars          map[string]float64     `protobuf:"bytes,5,rep,name=pillars,proto3" json:"pillars,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"fixed64,2,opt,name=value"`
+	WalkMinutes      map[string]float64     `protobuf:"bytes,6,rep,name=walk_minutes,json=walkMinutes,proto3" json:"walk_minutes,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"fixed64,2,opt,name=value"`
+	RentEurM2        *float64               `protobuf:"fixed64,7,opt,name=rent_eur_m2,json=rentEurM2,proto3,oneof" json:"rent_eur_m2,omitempty"`
+	VoiClass         string                 `protobuf:"bytes,8,opt,name=voi_class,json=voiClass,proto3" json:"voi_class,omitempty"`
+	VoiExplain       string                 `protobuf:"bytes,9,opt,name=voi_explain,json=voiExplain,proto3" json:"voi_explain,omitempty"`
+	RentSource       string                 `protobuf:"bytes,10,opt,name=rent_source,json=rentSource,proto3" json:"rent_source,omitempty"`
+	RentAsOf         string                 `protobuf:"bytes,11,opt,name=rent_as_of,json=rentAsOf,proto3" json:"rent_as_of,omitempty"`
+	AskingRentEurM2  *float64               `protobuf:"fixed64,12,opt,name=asking_rent_eur_m2,json=askingRentEurM2,proto3,oneof" json:"asking_rent_eur_m2,omitempty"`
+	AskingRentSource string                 `protobuf:"bytes,13,opt,name=asking_rent_source,json=askingRentSource,proto3" json:"asking_rent_source,omitempty"`
+	SaleEurM2        *float64               `protobuf:"fixed64,14,opt,name=sale_eur_m2,json=saleEurM2,proto3,oneof" json:"sale_eur_m2,omitempty"`
+	SaleSource       string                 `protobuf:"bytes,15,opt,name=sale_source,json=saleSource,proto3" json:"sale_source,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *Hex) Reset() {
@@ -182,6 +188,48 @@ func (x *Hex) GetVoiExplain() string {
 	return ""
 }
 
+func (x *Hex) GetRentSource() string {
+	if x != nil {
+		return x.RentSource
+	}
+	return ""
+}
+
+func (x *Hex) GetRentAsOf() string {
+	if x != nil {
+		return x.RentAsOf
+	}
+	return ""
+}
+
+func (x *Hex) GetAskingRentEurM2() float64 {
+	if x != nil && x.AskingRentEurM2 != nil {
+		return *x.AskingRentEurM2
+	}
+	return 0
+}
+
+func (x *Hex) GetAskingRentSource() string {
+	if x != nil {
+		return x.AskingRentSource
+	}
+	return ""
+}
+
+func (x *Hex) GetSaleEurM2() float64 {
+	if x != nil && x.SaleEurM2 != nil {
+		return *x.SaleEurM2
+	}
+	return 0
+}
+
+func (x *Hex) GetSaleSource() string {
+	if x != nil {
+		return x.SaleSource
+	}
+	return ""
+}
+
 var File_hex_v1_hex_proto protoreflect.FileDescriptor
 
 const file_hex_v1_hex_proto_rawDesc = "" +
@@ -189,7 +237,7 @@ const file_hex_v1_hex_proto_rawDesc = "" +
 	"\x10hex/v1/hex.proto\x12\x06hex.v1\"<\n" +
 	"\rGetHexRequest\x12\x1b\n" +
 	"\tcity_slug\x18\x01 \x01(\tR\bcitySlug\x12\x0e\n" +
-	"\x02h3\x18\x02 \x01(\tR\x02h3\"\xec\x03\n" +
+	"\x02h3\x18\x02 \x01(\tR\x02h3\"\xf8\x05\n" +
 	"\x03Hex\x12\x0e\n" +
 	"\x02h3\x18\x01 \x01(\tR\x02h3\x12\x1b\n" +
 	"\tcity_slug\x18\x02 \x01(\tR\bcitySlug\x12\x1b\n" +
@@ -200,7 +248,17 @@ const file_hex_v1_hex_proto_rawDesc = "" +
 	"\vrent_eur_m2\x18\a \x01(\x01H\x01R\trentEurM2\x88\x01\x01\x12\x1b\n" +
 	"\tvoi_class\x18\b \x01(\tR\bvoiClass\x12\x1f\n" +
 	"\vvoi_explain\x18\t \x01(\tR\n" +
-	"voiExplain\x1a:\n" +
+	"voiExplain\x12\x1f\n" +
+	"\vrent_source\x18\n" +
+	" \x01(\tR\n" +
+	"rentSource\x12\x1c\n" +
+	"\n" +
+	"rent_as_of\x18\v \x01(\tR\brentAsOf\x120\n" +
+	"\x12asking_rent_eur_m2\x18\f \x01(\x01H\x02R\x0faskingRentEurM2\x88\x01\x01\x12,\n" +
+	"\x12asking_rent_source\x18\r \x01(\tR\x10askingRentSource\x12#\n" +
+	"\vsale_eur_m2\x18\x0e \x01(\x01H\x03R\tsaleEurM2\x88\x01\x01\x12\x1f\n" +
+	"\vsale_source\x18\x0f \x01(\tR\n" +
+	"saleSource\x1a:\n" +
 	"\fPillarsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\x01R\x05value:\x028\x01\x1a>\n" +
@@ -208,7 +266,9 @@ const file_hex_v1_hex_proto_rawDesc = "" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\x01R\x05value:\x028\x01B\x0f\n" +
 	"\r_living_scoreB\x0e\n" +
-	"\f_rent_eur_m22:\n" +
+	"\f_rent_eur_m2B\x15\n" +
+	"\x13_asking_rent_eur_m2B\x0e\n" +
+	"\f_sale_eur_m22:\n" +
 	"\n" +
 	"HexService\x12,\n" +
 	"\x06GetHex\x12\x15.hex.v1.GetHexRequest\x1a\v.hex.v1.HexB\x18Z\x16urban/gen/hex/v1;hexv1b\x06proto3"

@@ -24,4 +24,10 @@ message Hex {
   optional double rent_eur_m2 = 7;
   string voi_class = 8;
   string voi_explain = 9;
+  string rent_source = 10;
+  string rent_as_of = 11;
+  optional double asking_rent_eur_m2 = 12;
+  string asking_rent_source = 13;
+  optional double sale_eur_m2 = 14;
+  string sale_source = 15;
 }

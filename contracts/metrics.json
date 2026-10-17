@@ -20,7 +20,7 @@
       "playground": "dn_playground_min",
       "center": "center_min"
     },
-    "scalars": ["h3", "s_living", "rent_eur_m2", "voi_class", "voi_explain"]
+    "scalars": ["h3", "s_living", "rent_eur_m2", "rent_source", "rent_as_of", "asking_rent_eur_m2", "asking_rent_source", "sale_eur_m2", "sale_source", "voi_class", "voi_explain"]
   },
   "steps": [
     {
@@ -362,6 +362,20 @@
         "confidence": 0.7,
         "year": 2026,
         "note": "Nur baulich getrennte Radwege (highway=cycleway, cycleway=track). Kein Radfahrstreifen."
+      }
+    },
+    {
+      "id": "walkability",
+      "kind": "overlay",
+      "score_key": "s_walkability",
+      "label": "Walkability",
+      "type": "objective_positive",
+      "map_view": true,
+      "meta": {
+        "source": "intersection_density+landuse+transit_distance+population",
+        "confidence": 0.55,
+        "year": 2026,
+        "note": "EPA National Walkability Index shape: connectivity 0.34, transit proximity 0.33, land-use diversity 0.23, gross density 0.10. Green/park proximity is a recreational floor so parks are not painted poor. Not Gehqualität."
       }
     }
   ]

@@ -66,7 +66,7 @@ export const DAILY_LIFE_CATEGORY_WEIGHTS: Record<string, Record<string, number>>
 };
 
 export const WALK_MINUTE_BANDS: Record<string, [number, number][]> = {
-  default: [[0, 100], [5, 100], [10, 70], [15, 30], [20, 0]],
+  default: [[0, 100], [1, 88], [3, 70], [5, 52], [8, 32], [12, 15], [16, 5], [20, 0]],
 };
 
 /** Properties written by the pipeline into hexes.geojson features. */
@@ -109,6 +109,8 @@ export type HexProperties = {
   s_density?: number | null;
   /** Dedicated/separated cycleways overlay — not part of Living Score */
   s_cycleways?: number | null;
+  /** Built-form walkability (connectivity, transit proximity, land-use mix, density). Not Gehqualität and not part of Living Score. */
+  s_walkability?: number | null;
   cycleway_length_m?: number | null;
   nearest_cycleway_m?: number | null;
   cycleway_km_per_km2?: number | null;
@@ -203,7 +205,7 @@ export type HexProperties = {
   voi_local_value_advantage?: number | null;
   voi_local_delta?: number | null;
   voi_gem_strength?: number | null;
-  /** dn_* / dl_* / center_min_* / wq_* / uf_* and future additions. */
+  /** dn_* / dl_* / center_min_* / wq_* / uf_* / wb_* and future additions. */
   [key: string]: unknown;
 };
 
@@ -235,6 +237,7 @@ export const DECLARED_HEX_PROPERTIES: string[] = [
   's_housing',
   's_density',
   's_cycleways',
+  's_walkability',
   'cycleway_length_m',
   'nearest_cycleway_m',
   'cycleway_km_per_km2',
@@ -372,6 +375,7 @@ export const FRONTEND_HEX_PROPERTIES: string[] = [
   's_density',
   's_traffic_safety',
   's_cycleways',
+  's_walkability',
   'nearest_cycleway_m',
   'cycleway_km_per_km2',
   's_rent_relative_city',
@@ -414,6 +418,7 @@ export const SCORE_PROPS: Record<string, string> = {
   density: 's_density',
   price: 's_rent_relative_city',
   cycleways: 's_cycleways',
+  walkability: 's_walkability',
 };
 
 export const METRIC_LABELS: Record<string, string> = {
@@ -439,6 +444,7 @@ export const METRIC_LABELS: Record<string, string> = {
   density: 'Dichte',
   price: 'Kaltmiete',
   cycleways: 'Radwege',
+  walkability: 'Walkability',
 };
 
 export const PILLAR_LABELS: Record<string, string> = {
@@ -460,4 +466,5 @@ export const PILLAR_LABELS: Record<string, string> = {
 export const MAP_VIEW_METRICS: string[] = [
   'price',
   'cycleways',
+  'walkability',
 ];

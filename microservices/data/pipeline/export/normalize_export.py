@@ -397,6 +397,7 @@ def build(ctx: CityContext) -> gpd.GeoDataFrame:
 
 
 _SKIP_EXPORT = frozenset({"geometry", "h3_index", "comfort"})
+_CONSUMED = frozenset(key for keys in generated.CONSUMER_HEX_PROPERTIES.values() for key in keys)
 _PATTERN_PREFIXES = ("dn_", "dl_", "center_min_", "wq_", "uf_")
 _ROUND = {
     "transport_score": 3,
@@ -479,6 +480,9 @@ def _feature_properties(row: pd.Series) -> dict:
             if key in required:
                 if key not in row.index:
                     raise contract.ContractError(f"required property {key} missing on hex {row.get('h3_index')}")
+                props[key] = None
+            elif key in _CONSUMED:
+                # A stale cache can lack a column; consumers need an explicit null, not an absent key.
                 props[key] = None
             continue
         props[key] = _jsonify(key, raw)

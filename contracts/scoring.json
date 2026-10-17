@@ -41,7 +41,7 @@
     }
   },
   "walk_minute_bands": {
-    "$comment": "Piecewise [minutes, score] knots. Python interpolates the same knots in score_scales.walk_minute_band_score; the frontend uses them as ACCESSIBILITY_BANDS.default.",
-    "default": [[0, 100], [5, 100], [10, 70], [15, 30], [20, 0]]
+    "$comment": "Piecewise [minutes, score] knots. No 5-minute plateau: that plateau scored every amenity inside 5 minutes as 100 and painted dense cities uniformly excellent. 0 min (on the block) is 100, 3 min is good (70), 5 min is average (52), 20 min is 0. Python interpolates these in score_scales.walk_minute_band_score; the frontend uses them as ACCESSIBILITY_BANDS.default.",
+    "default": [[0, 100], [1, 88], [3, 70], [5, 52], [8, 32], [12, 15], [16, 5], [20, 0]]
   }
 }

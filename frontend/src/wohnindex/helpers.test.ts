@@ -8,10 +8,12 @@ describe('buildMapViewOptions', () => {
       daily_life: 'Infrastruktur',
       price: 'Kaltmiete',
       cycleways: 'Radwege',
+      walkability: 'Walkability',
     });
-    expect(opts.map((o) => o.value)).toEqual(['objective', 'price', 'cycleways']);
+    expect(opts.map((o) => o.value)).toEqual(['objective', 'price', 'cycleways', 'walkability']);
     expect(opts[1]?.label).toBe('Kaltmiete');
     expect(opts[2]?.label).toBe('Radwege');
+    expect(opts[3]?.label).toBe('Walkability');
   });
 });
 

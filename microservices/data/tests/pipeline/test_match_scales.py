@@ -15,12 +15,14 @@ from pipeline.export.score_scales import (
 
 
 def test_walk_minute_bands():
-    s = walk_minute_band_score(pd.Series([5, 10, 15, 20, 25]))
+    s = walk_minute_band_score(pd.Series([0, 1, 5, 10, 15, 20, 25]))
     assert float(s.iloc[0]) == 100
-    assert float(s.iloc[1]) == 70
-    assert float(s.iloc[2]) == 30
-    assert float(s.iloc[3]) == 0
-    assert float(s.iloc[4]) == 0
+    assert float(s.iloc[1]) == 88
+    assert float(s.iloc[2]) == 52
+    assert float(s.iloc[3]) == 23.5
+    assert float(s.iloc[4]) == 7.5
+    assert float(s.iloc[5]) == 0
+    assert float(s.iloc[6]) == 0
 
 
 def test_center_decay_anchors():

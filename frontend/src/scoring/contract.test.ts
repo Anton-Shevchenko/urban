@@ -64,10 +64,11 @@ describe('generated contract matches contracts/scoring.json', () => {
     expect(SCORE_PROPS.housing_affordability).toBe('s_rent_kalt_benchmark');
     expect(SCORE_PROPS.price).toBe('s_rent_relative_city');
     expect(SCORE_PROPS.cycleways).toBe('s_cycleways');
+    expect(SCORE_PROPS.walkability).toBe('s_walkability');
   });
 
-  it('lists Kaltmiete and cycleways as extra map-view overlays', () => {
-    expect(MAP_VIEW_METRICS).toEqual(['price', 'cycleways']);
+  it('lists Kaltmiete, cycleways and walkability as extra map-view overlays', () => {
+    expect(MAP_VIEW_METRICS).toEqual(['price', 'cycleways', 'walkability']);
   });
 });
 
@@ -98,10 +99,13 @@ describe('scoring modules re-export the contract instead of redefining it', () =
   it('the default accessibility band is the contract band', () => {
     expect(ACCESSIBILITY_BANDS.default).toBe(WALK_MINUTE_BANDS.default);
     // Same knots the Python pipeline interpolates.
-    expect(bandScore(5, ACCESSIBILITY_BANDS.default)).toBe(100);
-    expect(bandScore(10, ACCESSIBILITY_BANDS.default)).toBe(70);
-    expect(bandScore(15, ACCESSIBILITY_BANDS.default)).toBe(30);
+    expect(bandScore(0, ACCESSIBILITY_BANDS.default)).toBe(100);
+    expect(bandScore(1, ACCESSIBILITY_BANDS.default)).toBe(88);
+    expect(bandScore(5, ACCESSIBILITY_BANDS.default)).toBe(52);
+    expect(bandScore(10, ACCESSIBILITY_BANDS.default)).toBe(23.5);
+    expect(bandScore(15, ACCESSIBILITY_BANDS.default)).toBe(7.5);
     expect(bandScore(20, ACCESSIBILITY_BANDS.default)).toBe(0);
+    expect(bandScore(5, ACCESSIBILITY_BANDS.default)!).toBeLessThan(bandScore(1, ACCESSIBILITY_BANDS.default)!);
   });
 });
 

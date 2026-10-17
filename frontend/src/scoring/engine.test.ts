@@ -34,18 +34,20 @@ function engineWithPreset(presetId: string) {
 }
 
 describe('walk-minute band accessibility', () => {
-  it('scores perfect within 5 minutes', () => {
-    expect(walkMinuteBandScore(1)).toBe(100);
-    expect(walkMinuteBandScore(5)).toBe(100);
-    expect(walkMinuteDecayScore(1)).toBe(100);
+  it('scores the block as excellent and a 5-minute walk as average', () => {
+    expect(walkMinuteBandScore(0)).toBe(100);
+    expect(walkMinuteBandScore(1)).toBe(88);
+    expect(walkMinuteBandScore(5)).toBe(52);
+    expect(walkMinuteDecayScore(1)).toBe(walkMinuteBandScore(1));
   });
 
   it('falls off through walk-minute knots', () => {
-    expect(walkMinuteBandScore(5)).toBe(100);
-    expect(walkMinuteBandScore(10)).toBe(70);
-    expect(walkMinuteBandScore(15)).toBe(30);
+    expect(walkMinuteBandScore(5)).toBe(52);
+    expect(walkMinuteBandScore(10)).toBe(23.5);
+    expect(walkMinuteBandScore(15)).toBe(7.5);
     expect(walkMinuteBandScore(20)).toBe(0);
-    expect(walkMinuteBandScore(10)!).toBeGreaterThan(walkMinuteBandScore(15)!);
+    expect(walkMinuteBandScore(1)!).toBeGreaterThan(walkMinuteBandScore(5)!);
+    expect(walkMinuteBandScore(5)!).toBeGreaterThan(walkMinuteBandScore(10)!);
   });
 });
 
