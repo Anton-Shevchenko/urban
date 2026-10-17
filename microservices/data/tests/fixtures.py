@@ -142,6 +142,7 @@ def build_fixture_city(tmp_path: Path, slug: str = "testkirchen") -> CityContext
             "transit_service_score": ramp(12, 92),
             "transit_service_raw": ramp(12, 92),
             "station_proximity_score": ramp(10, 95),
+            "transit_distance_score": ramp(8, 96),
         }
     ).to_parquet(cache / config.TRANSIT_SERVICE_FILE)
 
@@ -194,6 +195,8 @@ def build_fixture_city(tmp_path: Path, slug: str = "testkirchen") -> CityContext
             "urban_form_score": ramp(30, 88),
             "uf_density": ramp(25, 90),
             "uf_activity": ramp(20, 92),
+            "landuse_residential_share": ramp(0.2, 0.55),
+            "landuse_commercial_share": ramp(0.05, 0.35),
         }
     ).to_parquet(cache / config.URBAN_FORM_FILE)
 

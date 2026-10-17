@@ -80,6 +80,15 @@ def test_cycleways_overlay_is_exported(exported):
     assert max(scores) - min(scores) > 5
 
 
+def test_walkability_overlay_is_exported(exported):
+    props = [f["properties"] for f in exported["data"]["features"]]
+    scores = [p.get("s_walkability") for p in props]
+    assert all(v is not None and 0 <= v <= 100 for v in scores)
+    assert max(scores) - min(scores) > 5
+    for key in ("wb_connectivity", "wb_transit", "wb_diversity", "wb_density", "wb_green"):
+        assert all(p.get(key) is not None for p in props)
+
+
 def test_cycleway_lines_sidecar_is_exported(exported):
     from pipeline import config
 

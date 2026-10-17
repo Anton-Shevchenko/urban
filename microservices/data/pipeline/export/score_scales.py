@@ -765,6 +765,225 @@ def cycleway_distance_score(dist_m: pd.Series) -> pd.Series:
     return _interp(dist_m, [0, 80, 200, 400, 800, 1500], [100, 85, 65, 40, 15, 0], below=100, above=0)
 
 
+# EPA National Walkability Index thirds, with Frank's density kept small
+# because its independent elasticity is the weakest of the four.
+# connectivity 0.34, transit proximity 0.33, land-use diversity 0.23, density 0.10.
+WALKABILITY_WEIGHTS: dict[str, float] = {
+    "connectivity": 0.34,
+    "transit": 0.33,
+    "diversity": 0.23,
+    "density": 0.10,
+}
+# Same knots as walking_quality network scores.
+_WALK_IX_X = [5, 20, 45, 80, 140, 200]
+_WALK_IX_Y = [10, 30, 55, 75, 92, 100]
+_WALK_BLOCK_X = [35, 60, 90, 130, 200, 320]
+_WALK_BLOCK_Y = [100, 88, 70, 45, 22, 8]
+_WALK_DENSITY_X = [400, 1500, 4000, 8000, 15000, 25000]
+_WALK_DENSITY_Y = [10, 30, 55, 75, 90, 100]
+# urban_form treats a city as landuse-sparse below this commercial share.
+_LANDUSE_COMMERCIAL_MIN = 0.02
+_DESTINATION_MIX_MIN = 40.0
+
+
+def _walkability_connectivity(df: pd.DataFrame) -> pd.Series | None:
+    """0.65 intersection density + 0.35 block length. One column is enough."""
+    has_ix = "intersection_density" in df.columns
+    has_block = "mean_block_length_m" in df.columns
+    if not has_ix and not has_block:
+        return None
+    parts: list[pd.Series] = []
+    weights: list[float] = []
+    if has_ix:
+        parts.append(
+            _interp(
+                df["intersection_density"].astype(float).fillna(0),
+                _WALK_IX_X,
+                _WALK_IX_Y,
+                below=5,
+                above=100,
+            )
+        )
+        weights.append(0.65)
+    if has_block:
+        parts.append(
+            _interp(
+                df["mean_block_length_m"].astype(float).fillna(120),
+                _WALK_BLOCK_X,
+                _WALK_BLOCK_Y,
+                below=100,
+                above=5,
+            )
+        )
+        weights.append(0.35)
+    total = sum(weights)
+    score = sum(part * (weight / total) for part, weight in zip(parts, weights, strict=True))
+    return pd.Series(score, index=df.index).clip(0, 100).round(1)
+
+
+def _walkability_transit(df: pd.DataFrame) -> pd.Series | None:
+    """Distance to the nearest stop. Frequency stays in s_transit."""
+    if "transit_distance_score" not in df.columns:
+        return None
+    return df["transit_distance_score"].astype(float).fillna(0).clip(0, 100).round(1)
+
+
+def _landuse_entropy(residential: pd.Series, commercial: pd.Series) -> pd.Series:
+    """Shannon entropy of residential / commercial / remainder, scaled to 0–100."""
+    res = residential.astype(float).fillna(0).clip(0, 1)
+    com = commercial.astype(float).fillna(0).clip(0, 1)
+    other = (1.0 - res - com).clip(lower=0)
+    total = res + com + other
+    shares = [res / total, com / total, other / total]
+    entropy = pd.Series(0.0, index=res.index)
+    for share in shares:
+        arr = share.to_numpy(dtype=float)
+        term = np.zeros_like(arr)
+        mask = np.isfinite(arr) & (arr > 0)
+        term[mask] = -arr[mask] * np.log(arr[mask])
+        entropy = entropy + pd.Series(term, index=res.index)
+    return (entropy / np.log(3) * 100).fillna(0).clip(0, 100).round(1)
+
+
+def _destination_diversity(df: pd.DataFrame) -> pd.Series | None:
+    """Share of daily-life groups scoring at least 40. Absent groups count as misses."""
+    groups = list(contract.DAILY_LIFE_GROUP_WEIGHTS)
+    found = False
+    hits = pd.Series(0.0, index=df.index)
+    for group in groups:
+        names = [f"dl_{group}"]
+        if group == "other":
+            names.append("dl_leisure")
+        elif group == "leisure":
+            names.append("dl_other")
+        series = None
+        for name in names:
+            if name in df.columns:
+                series = df[name]
+                found = True
+                break
+        if series is None:
+            continue
+        hits = hits + (series.astype(float).fillna(0) >= _DESTINATION_MIX_MIN).astype(float)
+    if not found:
+        return None
+    return (hits / len(groups) * 100).clip(0, 100).round(1)
+
+
+def _walkability_diversity(df: pd.DataFrame) -> pd.Series | None:
+    """Land-use entropy, or daily-life group mix when commercial landuse is empty."""
+    has_commercial = "landuse_commercial_share" in df.columns
+    if has_commercial:
+        commercial = df["landuse_commercial_share"].astype(float)
+        peak = commercial.max(skipna=True)
+        if pd.notna(peak) and float(peak) >= _LANDUSE_COMMERCIAL_MIN:
+            if "landuse_residential_share" in df.columns:
+                residential = df["landuse_residential_share"]
+            else:
+                residential = pd.Series(0.0, index=df.index)
+            return _landuse_entropy(residential, commercial)
+    return _destination_diversity(df)
+
+
+def _walkability_density(df: pd.DataFrame) -> pd.Series | None:
+    """Monotonic log gross population density. Higher stays higher."""
+    if "population_density" not in df.columns:
+        return None
+    return _interp(
+        df["population_density"].astype(float).fillna(0),
+        _WALK_DENSITY_X,
+        _WALK_DENSITY_Y,
+        below=10,
+        above=100,
+    )
+
+
+def _walkability_green_floor(df: pd.DataFrame) -> pd.Series | None:
+    """Recreational stroll floor from nearby green.
+
+    EPA-style built form paints parks red (few intersections, no mix, low
+    density). Large green patches are still places people walk for pleasure,
+    so they get a floor — never a ceiling on a dense street grid.
+    """
+    has_share = "green_share_inside_500m" in df.columns
+    has_dist = "nearest_park_dist_m" in df.columns or "green_dist_m" in df.columns
+    if not has_share and not has_dist:
+        return None
+
+    if has_share:
+        share = df["green_share_inside_500m"].astype(float).fillna(0)
+        from_share = _interp(
+            share, [12, 20, 35, 55, 75], [42, 55, 68, 78, 85], below=0, above=85
+        )
+        from_share = from_share.where(share >= 12, other=0.0)
+    else:
+        from_share = pd.Series(0.0, index=df.index)
+
+    if has_dist:
+        dist_col = "nearest_park_dist_m" if "nearest_park_dist_m" in df.columns else "green_dist_m"
+        dist = df[dist_col].astype(float).fillna(2000)
+        from_dist = _interp(
+            dist, [0, 80, 200, 400, 800], [72, 65, 52, 35, 0], below=72, above=0
+        )
+        if "nearest_park_area_ha" in df.columns:
+            area = df["nearest_park_area_ha"].astype(float).fillna(0)
+            # Tiny pocket parks do not lift a hex out of red on their own.
+            area_ok = _interp(area, [0.3, 1.0, 5.0, 15.0], [0.55, 0.75, 0.95, 1.0], below=0.4, above=1.0)
+            from_dist = (from_dist * area_ok).clip(0, 100)
+    else:
+        from_dist = pd.Series(0.0, index=df.index)
+
+    floor = pd.concat([from_share, from_dist], axis=1).max(axis=1).clip(0, 100)
+    return floor.round(1)
+
+
+def walkability_index(df: pd.DataFrame) -> pd.DataFrame:
+    """EPA-shaped walkability on 0–100 from columns already on the hex frame.
+
+    Returns ``s_walkability`` plus ``wb_connectivity``, ``wb_transit``,
+    ``wb_diversity``, ``wb_density`` and ``wb_green`` (recreational floor).
+    A missing component column is dropped and the remaining weights are
+    renormalised. A present column of zeros stays zero. Green is applied as
+    a floor after the built-form blend so parks are not painted poor. With no
+    components at all, ``s_walkability`` is empty.
+    """
+    components: dict[str, pd.Series | None] = {
+        "connectivity": _walkability_connectivity(df),
+        "transit": _walkability_transit(df),
+        "diversity": _walkability_diversity(df),
+        "density": _walkability_density(df),
+    }
+    out = pd.DataFrame(index=df.index)
+    present: dict[str, pd.Series] = {}
+    for key, series in components.items():
+        if series is None:
+            out[f"wb_{key}"] = pd.Series(np.nan, index=df.index)
+            continue
+        scored = series.astype(float).clip(0, 100).round(1)
+        out[f"wb_{key}"] = scored
+        present[key] = scored
+    green_floor = _walkability_green_floor(df)
+    if green_floor is None:
+        out["wb_green"] = pd.Series(np.nan, index=df.index)
+    else:
+        out["wb_green"] = green_floor.astype(float).clip(0, 100).round(1)
+
+    if not present:
+        out["s_walkability"] = pd.Series(np.nan, index=df.index)
+        return out
+    total_w = sum(WALKABILITY_WEIGHTS[key] for key in present)
+    score = pd.Series(0.0, index=df.index)
+    for key, series in present.items():
+        score = score + series.fillna(0) * (WALKABILITY_WEIGHTS[key] / total_w)
+    if green_floor is not None:
+        score = pd.Series(
+            np.maximum(score.to_numpy(dtype=float), green_floor.fillna(0).to_numpy(dtype=float)),
+            index=df.index,
+        )
+    out["s_walkability"] = score.clip(0, 100).round(1)
+    return out
+
+
 def cycleway_score(km_per_km2: pd.Series, dist_m: pd.Series) -> pd.Series:
     """Overlay score: density in the hex, with a smaller proximity bonus nearby."""
     dens = cycleway_density_score(km_per_km2)

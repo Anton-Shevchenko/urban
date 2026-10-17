@@ -32,6 +32,7 @@ from pipeline.export.score_scales import (
     rent_value_score,
     traffic_safety_score,
     traffic_safety_strict,
+    walkability_index,
 )
 from pipeline.factors.center import center_anchors
 from pipeline.generated import contract as generated
@@ -373,6 +374,9 @@ def build(ctx: CityContext) -> gpd.GeoDataFrame:
     if "s_cycleways" in df.columns:
         df["s_cycleways"] = df["s_cycleways"].clip(0, 100).round(1)
 
+    wb = walkability_index(df)
+    df[wb.columns] = wb
+
     if "rent_eur_m2" in df.columns:
         df["s_rent_relative_city"] = rent_percentile_score(df["rent_eur_m2"])
         df["s_rent_kalt_benchmark"] = rent_kalt_lenient(df["rent_eur_m2"])
@@ -428,7 +432,7 @@ def build(ctx: CityContext) -> gpd.GeoDataFrame:
 
 _SKIP_EXPORT = frozenset({"geometry", "h3_index", "comfort"})
 _CONSUMED = frozenset(key for keys in generated.CONSUMER_HEX_PROPERTIES.values() for key in keys)
-_PATTERN_PREFIXES = ("dn_", "dl_", "center_min_", "wq_", "uf_")
+_PATTERN_PREFIXES = ("dn_", "dl_", "center_min_", "wq_", "uf_", "wb_")
 _ROUND = {
     "transport_score": 3,
     "green_dist_m": 0,
