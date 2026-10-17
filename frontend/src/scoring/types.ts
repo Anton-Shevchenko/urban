@@ -11,7 +11,8 @@ export type MapMetricMode =
   | 'city_percentile'
   | `pillar:${string}`
   | 'cycleways'
-  | 'price';
+  | 'price'
+  | 'walkability';
 
 /** Generated from contracts/scoring.json — do not redeclare the pillar list. */
 export type { ObjectivePillarKey } from './generated/contract';

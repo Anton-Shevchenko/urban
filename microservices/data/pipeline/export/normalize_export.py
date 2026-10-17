@@ -318,9 +318,10 @@ def build(ctx: CityContext) -> gpd.GeoDataFrame:
         walk_raw = _derive_walking_quality(df)
     df["walk_raw"] = walk_raw
 
-    # --- Objective pillars (absolute) + city-context legacy columns --------
-    # objective-v2: s_* pillars used for Living Score are absolute / raw.
-    # City-normalized copies kept as s_*_city for diagnostics / percentile.
+    # --- Objective pillars + city-context legacy columns -------------------
+    # objective-v2: s_daily_life, s_walk, s_green, s_transit and
+    # s_housing_affordability are absolute. s_quiet blends 0.55 absolute dB
+    # with 0.45 within-city rank. s_*_city copies are diagnostics only.
     df["s_daily_life"] = daily_raw.clip(0, 100).round(1)
     df["s_daily_life_city"] = city_normalize(daily_raw, city_type, "daily_life")
     df["s_daily_needs"] = df["s_daily_life"]

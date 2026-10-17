@@ -839,17 +839,18 @@ export function useWohnIndexStore(options: UseWohnIndexOptions = {}) {
       const p = feature.properties as Record<string, unknown>;
       const h3 = String(p.h3 ?? p.h3_index ?? '');
       if (!h3) return;
-      const living = Number(p.s_living);
+      const loc = engine.locationScore?.(p);
+      const living = loc?.objectiveScore ?? loc?.score ?? Number(p.s_living);
       setChatHex({
         h3,
         citySlug,
         cityName,
-        livingScore: Number.isFinite(living) ? living : null,
+        livingScore: living != null && Number.isFinite(Number(living)) ? Number(living) : null,
         props: snapshotHexProps(p),
       });
       setChatOpen(true);
     },
-    [citySlug, cityName],
+    [citySlug, cityName, engine],
   );
 
   const addDestination = useCallback((lat: number, lng: number) => {

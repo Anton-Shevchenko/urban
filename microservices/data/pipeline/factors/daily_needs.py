@@ -1,6 +1,7 @@
 """Factor - daily-life walking accessibility (15-minute city).
 
-Quality-over-quantity: each amenity uses walk-minute bands (5→100 … 20→0);
+Quality-over-quantity: each amenity uses the contract walk-minute bands
+(0 min → 100, 5 min → 52, 20 min → 0 — no 5-minute plateau);
 life groups take the best amenity score, then combine with fixed weights.
 Parks are excluded (Green Index). City normalization applied in normalize_export.
 """
@@ -211,7 +212,8 @@ def compute(ctx: CityContext) -> gpd.GeoDataFrame:
         out[f"dn_{cat}_n"] = in_hex
 
     # Weighted category aggregation inside each group (not max).
-    # categoryScore ≈ 0.75×nearestAvail + 0.25×choice when count≥2 bonus already in avail.
+    # Category score is the walk-minute band; a small bonus applies when a second
+    # amenity of the same kind is within 5 minutes.
     group_scores: dict[str, pd.Series] = {}
     cat_series = {cat: pd.Series(avail_arr[:, j], index=out.index) for j, cat in enumerate(CATEGORIES)}
     for group in GROUP_WEIGHTS:

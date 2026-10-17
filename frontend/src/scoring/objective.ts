@@ -1,16 +1,16 @@
 /**
- * Objective Living Score (objective-v2) — absolute, profile-independent.
+ * Objective Living Score (objective-v2) — profile-independent.
+ *
+ * Pillar scores and s_living come from the pipeline export. This module does
+ * not refit rent, noise, or green curves. Walk-minute bands remain only so
+ * Personal Match can score a daily-life group whose exported dl_* is missing.
  */
 
 import {
   ACCESSIBILITY_BANDS,
-  CHOICE_WEIGHT,
   CONFIDENCE_THRESHOLDS,
-  NEAREST_WEIGHT,
-  OBJECTIVE_NORMALIZATION,
   SCORE_METHOD_VERSION,
   bandScore,
-  normalizeByScale,
 } from './normalization';
 import { clamp100, finiteScore, num } from './num';
 import type {
@@ -90,8 +90,10 @@ export function categoryAccessibilityScore(cat: string, minutes: unknown): numbe
 }
 
 /**
- * Category score = 0.75×nearest + 0.25×choice when choice (avail) exists;
- * otherwise nearest only with reduced coverage.
+ * Category score is the contract walk-minute band.
+ * `dn_*_avail` is only a fallback when minutes were not exported: it is the
+ * same accessibility score (often from an older plateau), not a separate
+ * choice measure, so blending it back in flattens neighborhood differences.
  */
 export function categoryScoredValue(
   p: PipelinePoint,
@@ -99,45 +101,25 @@ export function categoryScoredValue(
 ): ScoredValue {
   const mins = num(p[`dn_${cat}_min`]);
   const avail = num(p[`dn_${cat}_avail`]);
-  const nearest = mins != null
-    ? categoryAccessibilityScore(cat, mins)
-    : (avail != null ? clamp100(avail) : null);
-
-  if (nearest == null) {
-    return emptyScored([`dn_${cat}_min`]);
-  }
-
-  const sourcesUsed = mins != null ? [`dn_${cat}_min`] : [`dn_${cat}_avail`];
-  const missingInputs: string[] = [];
-
-  if (avail != null && mins != null) {
-    const choice = clamp100(avail);
-    sourcesUsed.push(`dn_${cat}_avail`);
+  if (mins != null) {
+    const nearest = categoryAccessibilityScore(cat, mins);
+    if (nearest == null) return emptyScored([`dn_${cat}_min`]);
     return {
-      score: clamp100(NEAREST_WEIGHT * nearest + CHOICE_WEIGHT * choice),
+      score: clamp100(nearest),
       coverage: 1,
-      sourcesUsed,
-      missingInputs,
+      sourcesUsed: [`dn_${cat}_min`],
+      missingInputs: [],
     };
   }
-
-  if (mins != null && avail == null) {
-    missingInputs.push(`dn_${cat}_avail`);
+  if (avail != null) {
     return {
-      score: nearest,
-      coverage: NEAREST_WEIGHT, // choice missing
-      sourcesUsed,
-      missingInputs,
+      score: clamp100(avail),
+      coverage: 0.85,
+      sourcesUsed: [`dn_${cat}_avail`],
+      missingInputs: [`dn_${cat}_min`],
     };
   }
-
-  // avail-only path (proxy)
-  return {
-    score: nearest,
-    coverage: 0.85,
-    sourcesUsed,
-    missingInputs: [`dn_${cat}_min`],
-  };
+  return emptyScored([`dn_${cat}_min`]);
 }
 
 export function scoreDailyLifeGroup(
@@ -177,8 +159,8 @@ export function scoreDailyLifeGroup(
 }
 
 /**
- * Daily life from weighted categories (never max within group).
- * Does not use precomputed dl_* (those used max aggregation).
+ * Daily life from walk minutes and contract category weights.
+ * Ignores exported dl_* — Personal Match uses those via dailyLifeForPersonalMatch.
  */
 export function dailyLifeFromGroups(
   p: PipelinePoint,
@@ -220,164 +202,83 @@ export function dailyLifeFromGroups(
   };
 }
 
-export function scoreWalk(p: PipelinePoint): ScoredValue {
-  // Prefer absolute / raw walk scores — not city-normalized s_walk.
-  const raw = num(p.walking_quality_raw) ?? num(p.walking_quality_score);
-  if (raw != null) {
-    return {
-      score: clamp100(raw),
-      coverage: 1,
-      sourcesUsed: [p.walking_quality_raw != null ? 'walking_quality_raw' : 'walking_quality_score'],
-      missingInputs: [],
-    };
-  }
-  const wq = num(p.wq_network);
-  const ped = num(p.wq_ped_infra);
-  const calm = num(p.wq_traffic_calm);
-  const env = num(p.wq_environment);
-  const parts = [wq, ped, calm, env].filter((v): v is number => v != null);
-  if (parts.length) {
-    const score = clamp100(parts.reduce((a, b) => a + b, 0) / parts.length);
-    return {
-      score,
-      coverage: parts.length / 4,
-      sourcesUsed: ['wq_*'],
-      missingInputs: parts.length < 4 ? ['walking_quality_score'] : [],
-    };
-  }
-  // Last resort: city pillar is a proxy — mark as proxy with lower coverage.
-  const city = num(p.s_walk) ?? num(p.s_walking_quality);
-  if (city != null) {
-    return {
-      score: clamp100(city),
-      coverage: 0.55,
-      sourcesUsed: ['s_walk'],
-      missingInputs: ['walking_quality_score'],
-    };
-  }
-  return emptyScored(['walking_quality_score', 's_walk']);
-}
+/**
+ * Personal Match daily life. Exported dl_* already include pipeline bonuses;
+ * a group falls back to walk-minute bands only when its dl_* score is absent.
+ */
+export function dailyLifeForPersonalMatch(
+  p: PipelinePoint,
+  groupMultipliers: Record<string, number> | null = null,
+): ScoredValue {
+  let sum = 0;
+  let totalW = 0;
+  let covSum = 0;
+  let weightSum = 0;
+  const sourcesUsed: string[] = [];
+  const missingInputs: string[] = [];
 
-export function scoreGreen(p: PipelinePoint): ScoredValue {
-  const strict = num(p.s_green_strict);
-  if (strict != null) {
-    return {
-      score: clamp100(strict),
-      coverage: 1,
-      sourcesUsed: ['s_green_strict'],
-      missingInputs: [],
-    };
+  for (const [group, baseW] of Object.entries(DAILY_LIFE_GROUP_WEIGHTS)) {
+    const multKey = `dl_${group}`;
+    const legacyKey = group === 'leisure' ? 'dl_other' : multKey;
+    const mult = groupMultipliers?.[multKey]
+      ?? groupMultipliers?.[legacyKey]
+      ?? 1;
+    const ww = baseW * (Number.isFinite(mult) ? mult : 1);
+    weightSum += ww;
+
+    const exported = num(p[multKey]) ?? (group === 'leisure' ? num(p.dl_other) : null);
+    const scored = exported != null
+      ? scoredFromPrecomputed(exported, multKey)
+      : scoreDailyLifeGroup(p, group);
+    sourcesUsed.push(...scored.sourcesUsed);
+    missingInputs.push(...scored.missingInputs);
+    if (scored.score == null) continue;
+    sum += ww * scored.score;
+    totalW += ww;
+    covSum += ww * scored.coverage;
   }
-  const parkDist = num(p.nearest_park_dist_m) ?? num(p.green_dist_m);
-  const share = num(p.green_share_inside_500m);
-  const canopy = num(p.tree_canopy_pct);
-  const parkScore = normalizeByScale(parkDist, OBJECTIVE_NORMALIZATION.park_dist_m);
-  const shareScore = normalizeByScale(share, OBJECTIVE_NORMALIZATION.green_share_pct);
-  const canopyScore = normalizeByScale(canopy, OBJECTIVE_NORMALIZATION.tree_canopy_pct);
-  const parts: { s: number; w: number; src: string }[] = [];
-  if (parkScore != null) parts.push({ s: parkScore, w: 0.4, src: 'nearest_park_dist_m' });
-  if (shareScore != null) parts.push({ s: shareScore, w: 0.35, src: 'green_share_inside_500m' });
-  if (canopyScore != null) parts.push({ s: canopyScore, w: 0.25, src: 'tree_canopy_pct' });
-  if (!parts.length) {
-    const city = num(p.s_green);
-    if (city != null) {
-      return {
-        score: clamp100(city),
-        coverage: 0.55,
-        sourcesUsed: ['s_green'],
-        missingInputs: ['s_green_strict'],
-      };
-    }
-    return emptyScored(['s_green_strict', 'nearest_park_dist_m']);
+
+  if (totalW <= 0) {
+    return emptyScored(missingInputs.length ? missingInputs : ['daily_life']);
   }
-  const tw = parts.reduce((a, b) => a + b.w, 0);
+
   return {
-    score: clamp100(parts.reduce((a, b) => a + b.s * b.w, 0) / tw),
-    coverage: tw / 1.0,
-    sourcesUsed: parts.map((p0) => p0.src),
-    missingInputs: [],
+    score: clamp100(sum / totalW),
+    coverage: weightSum > 0 ? covSum / weightSum : 0,
+    sourcesUsed: [...new Set(sourcesUsed)],
+    missingInputs: [...new Set(missingInputs)],
   };
 }
 
+export function scoreWalk(p: PipelinePoint): ScoredValue {
+  const value = num(p.s_walk) ?? num(p.s_walking_quality) ?? num(p.walking_quality_score);
+  return scoredFromPrecomputed(value, 's_walk');
+}
+
+export function scoreGreen(p: PipelinePoint): ScoredValue {
+  const value = num(p.s_green);
+  if (value != null) return scoredFromPrecomputed(value, 's_green');
+  return scoredFromPrecomputed(num(p.s_green_strict), 's_green_strict');
+}
+
 export function scoreTransit(p: PipelinePoint): ScoredValue {
-  const raw = num(p.transit_service_raw) ?? num(p.transit_service_score);
-  if (raw != null) {
-    return {
-      score: clamp100(raw),
-      coverage: 1,
-      sourcesUsed: [p.transit_service_raw != null ? 'transit_service_raw' : 'transit_service_score'],
-      missingInputs: [],
-    };
-  }
-  const city = num(p.s_transit) ?? num(p.s_transit_service);
-  if (city != null) {
-    return {
-      score: clamp100(city),
-      coverage: 0.55,
-      sourcesUsed: ['s_transit'],
-      missingInputs: ['transit_service_score'],
-    };
-  }
-  return emptyScored(['transit_service_score', 's_transit']);
+  const value = num(p.s_transit) ?? num(p.s_transit_service) ?? num(p.transit_service_score);
+  return scoredFromPrecomputed(value, 's_transit');
 }
 
 export function scoreQuiet(p: PipelinePoint): ScoredValue {
-  const db = num(p.noise_db);
-  if (db != null) {
-    const score = normalizeByScale(db, OBJECTIVE_NORMALIZATION.noise_db);
-    const conf = num(p.noise_confidence);
-    const sourceFactor = conf != null ? Math.max(0.5, Math.min(1, conf)) : 0.85;
-    return {
-      score: score != null ? clamp100(score) : null,
-      coverage: score != null ? sourceFactor : 0,
-      sourcesUsed: ['noise_db'],
-      missingInputs: [],
-    };
-  }
-  // s_quiet / s_noise may already be absolute-ish after pipeline quiet_raw;
-  // treat as proxy with lower coverage (city_normalize may have blended rank).
-  const quiet = num(p.s_quiet) ?? num(p.s_noise);
-  if (quiet != null) {
-    return {
-      score: clamp100(quiet),
-      coverage: 0.55,
-      sourcesUsed: ['s_quiet'],
-      missingInputs: ['noise_db'],
-    };
-  }
-  return emptyScored(['noise_db', 's_quiet']);
+  const value = num(p.s_quiet) ?? num(p.s_noise);
+  return scoredFromPrecomputed(value, 's_quiet');
 }
 
 /**
- * Absolute housing affordability only — no daily_life/walk/transit blend.
+ * Exported cold-rent benchmark only. rent_eur_m2 is not rescored here.
  */
 export function scoreHousingAffordability(p: PipelinePoint): ScoredValue {
-  const rent = num(p.rent_eur_m2);
-  if (rent != null) {
-    const score = normalizeByScale(rent, OBJECTIVE_NORMALIZATION.rent_eur_m2);
-    const rc = p.rent_confidence;
-    let sourceConf = 0.75;
-    if (rc === 'low') sourceConf = 0.55;
-    else if (rc === 'high') sourceConf = 1;
-    else if (typeof rc === 'number') sourceConf = Math.max(0.4, Math.min(1, rc));
-    return {
-      score: score != null ? clamp100(score) : null,
-      coverage: score != null ? sourceConf : 0,
-      sourcesUsed: ['rent_eur_m2'],
-      missingInputs: [],
-    };
-  }
-  // Absolute precomputed benchmark (not city-relative).
-  const bench = num(p.s_rent_kalt_benchmark) ?? num(p.s_rent_strict);
-  if (bench != null) {
-    return {
-      score: clamp100(bench),
-      coverage: 0.9,
-      sourcesUsed: ['s_rent_kalt_benchmark'],
-      missingInputs: ['rent_eur_m2'],
-    };
-  }
-  return emptyScored(['rent_eur_m2', 's_rent_kalt_benchmark']);
+  const value = num(p.s_housing_affordability)
+    ?? num(p.s_rent_kalt_benchmark)
+    ?? num(p.s_rent_strict);
+  return scoredFromPrecomputed(value, 's_housing_affordability');
 }
 
 /** Informational / personal-only centrality. */
@@ -411,10 +312,7 @@ export type ObjectivePillarBundle = {
   proxiesUsed: string[];
 };
 
-/**
- * Prefer pipeline absolute pillars (objective-v2 export). Only recompute from
- * raw inputs when precomputed fields are missing — keeps map paint O(n) cheap.
- */
+/** Use an exported 0–100 pillar. Missing stays missing — no second curve. */
 function scoredFromPrecomputed(
   value: number | null,
   source: string,
@@ -434,39 +332,18 @@ export function computeObjectivePillars(
   groupMultipliers: Record<string, number> | null = null,
 ): ObjectivePillarBundle {
   void groupMultipliers;
-  // Fast path: absolute pillars already on the hex (schema ≥15 / objective-v2).
-  const preDaily = num(p.s_daily_life) ?? num(p.s_daily_needs);
-  const daily = preDaily != null
-    ? scoredFromPrecomputed(preDaily, 's_daily_life')
-    : dailyLifeFromGroups(p, null);
-
-  const preWalk = num(p.s_walk) ?? num(p.s_walking_quality) ?? num(p.walking_quality_score);
-  const walk = preWalk != null
-    ? scoredFromPrecomputed(preWalk, 's_walk')
-    : scoreWalk(p);
-
-  const preGreen = num(p.s_green) ?? num(p.s_green_strict);
-  const green = preGreen != null
-    ? scoredFromPrecomputed(preGreen, 's_green')
-    : scoreGreen(p);
-
-  const preTransit = num(p.s_transit) ?? num(p.s_transit_service) ?? num(p.transit_service_score);
-  const transit = preTransit != null
-    ? scoredFromPrecomputed(preTransit, 's_transit')
-    : scoreTransit(p);
-
-  const preQuiet = num(p.s_quiet) ?? num(p.s_noise);
-  const quiet = preQuiet != null
-    ? scoredFromPrecomputed(preQuiet, 's_quiet')
-    : scoreQuiet(p);
-
-  const preHousing = num(p.s_housing_affordability)
-    ?? num(p.s_rent_kalt_benchmark)
-    ?? num(p.s_rent_strict);
-  const housing = preHousing != null
-    ? scoredFromPrecomputed(preHousing, 's_housing_affordability')
-    : scoreHousingAffordability(p);
-
+  // Exported pillars, including when walk minutes are also present.
+  // A contract change shows up after re-export; recomputing here disagreed
+  // with the s_living hex-svc sends to chat.
+  const daily = scoredFromPrecomputed(
+    num(p.s_daily_life) ?? num(p.s_daily_needs),
+    's_daily_life',
+  );
+  const walk = scoreWalk(p);
+  const green = scoreGreen(p);
+  const transit = scoreTransit(p);
+  const quiet = scoreQuiet(p);
+  const housing = scoreHousingAffordability(p);
   const centrality = scoreCentrality(p);
 
   const scored: Record<PersonalPillarKey, ScoredValue> = {
@@ -482,18 +359,12 @@ export function computeObjectivePillars(
   const pillars = {} as Record<PersonalPillarKey, number | null>;
   const coverage = {} as Record<PersonalPillarKey, number>;
   const missingData: string[] = [];
-  const proxiesUsed: string[] = [];
 
   for (const key of PERSONAL_PILLAR_KEYS) {
     const s = scored[key];
     pillars[key] = finiteScore(s.score);
     coverage[key] = s.coverage;
     missingData.push(...s.missingInputs);
-    if (s.sourcesUsed.some((src) => src.startsWith('s_') && !src.includes('strict') && !src.includes('kalt'))) {
-      if (['s_walk', 's_green', 's_transit', 's_quiet', 's_center'].some((x) => s.sourcesUsed.includes(x))) {
-        proxiesUsed.push(key);
-      }
-    }
   }
 
   return {
@@ -501,7 +372,7 @@ export function computeObjectivePillars(
     coverage,
     scored,
     missingData: [...new Set(missingData)],
-    proxiesUsed: [...new Set(proxiesUsed)],
+    proxiesUsed: [],
   };
 }
 

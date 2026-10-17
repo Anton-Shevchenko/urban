@@ -428,7 +428,8 @@ export function createScoringEngine(
     let score: number | null = null;
 
     if (mode === 'objective') {
-      // Infra-only: city index is rebuilt from daily_life weights, never stale s_living.
+      // City index is s_living from the export, the same number hex-svc gives chat.
+      // A weight change in contracts/scoring.json needs a fresh export.
       const h3 = String(p.h3 ?? p.h3_index ?? '');
       const fromIndex = h3 ? cityIndex.byH3.get(h3) : undefined;
       score = fromIndex !== undefined

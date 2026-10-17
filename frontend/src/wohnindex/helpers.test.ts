@@ -35,7 +35,8 @@ describe('normalizeLegacyProps', () => {
     const p = features[0].properties as Record<string, unknown>;
     expect(p.s_daily_needs).toBeUndefined();
     expect(p.s_daily_life).toBeUndefined();
-    expect(locationScore(p).objectiveScore).toBeNull();
+    expect(locationScore(p).objectiveScore).toBe(100);
+    expect(locationScore(p).pillars.daily_life).toBeNull();
   });
 
   it('still copies real transit onto the legacy transport alias', () => {

@@ -1,4 +1,13 @@
-"""Absolute 0–100 scoring scales for green and price (no city-relative percentiles)."""
+"""0–100 scoring scales for the pipeline export.
+
+Cold rent (`rent_kalt_lenient`) and green (`green_quality_score`) are absolute:
+the same raw input scores the same in every city. Quiet is not. `noise_quiet_score`
+is 0.55 × an absolute dB curve plus 0.45 × a within-city log percentile (p5–p95).
+
+`s_green` is `green_quality_score` (reachable green, canopy, park area, cooling),
+not the 40/30/20/10 `green_composite_lenient` mix. The frontend reads the
+exported `s_*` values and does not refit these curves.
+"""
 
 from __future__ import annotations
 

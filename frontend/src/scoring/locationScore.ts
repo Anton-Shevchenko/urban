@@ -11,7 +11,7 @@ import {
   buildDiagnostics,
   computeObjectivePillars,
   computeObjectiveScore,
-  dailyLifeFromGroups,
+  dailyLifeForPersonalMatch,
 } from './objective';
 import type {
   LocationScoreResult,
@@ -33,6 +33,17 @@ export type PersonalScoreOptions = {
   /** Precomputed city percentile 0–100, or null. */
   cityPercentile?: number | null;
 };
+
+function hasCustomGroupMultipliers(
+  groupMultipliers: Record<string, number> | null | undefined,
+): boolean {
+  return !!(
+    groupMultipliers
+    && Object.keys(groupMultipliers).some(
+      (k) => k.startsWith('dl_') && groupMultipliers[k] !== 1,
+    )
+  );
+}
 
 /**
  * Smooth affordability penalty for Personal Match only.
@@ -61,11 +72,11 @@ export function computePersonalMatchScore(
   const focus = Math.max(0, Math.min(1, Number(options.affordabilityFocus) || 0));
   const weights = { ...pillarWeights };
 
-  // When group multipliers present, recompute daily_life with personal weights.
+  // Group multipliers reweight exported dl_* scores. Walk minutes are used
+  // only for a group whose dl_* field was not exported.
   let dailyLife = pillars.daily_life;
-  if (options.groupMultipliers && Object.keys(options.groupMultipliers).length) {
-    const dl = dailyLifeFromGroups(p, options.groupMultipliers);
-    dailyLife = dl.score;
+  if (hasCustomGroupMultipliers(options.groupMultipliers)) {
+    dailyLife = dailyLifeForPersonalMatch(p, options.groupMultipliers ?? null).score;
   }
 
   // Personal affordability: blend housing toward city-relative cheapness when focused.
@@ -125,9 +136,12 @@ export function locationScore(
   const focus = options.affordabilityFocus ?? 0;
 
   const bundle = computeObjectivePillars(p, null);
-  // Always recompute from OBJECTIVE_WEIGHTS (infra-only ≡ daily_life).
-  // Do not prefer stale pipeline s_objective / s_living composites.
-  const { objectiveScore, confidence, weightedContributions } = computeObjectiveScore(bundle);
+  // s_living is the pipeline composite shared with hex-svc chat.
+  // Changing contracts/scoring.json weights requires a fresh export;
+  // recomputing here is what split the map from the chat.
+  const exportedLiving = num(p.s_living) ?? num(p.s_objective);
+  const { confidence, weightedContributions } = computeObjectiveScore(bundle);
+  const objectiveScore = exportedLiving != null ? clamp100(exportedLiving) : null;
 
   const personal = computePersonalMatchScore(
     bundle.pillars,
@@ -194,9 +208,9 @@ export function cityPercentileForScore(
 
 /** Objective-only score for city index (no personal match work). */
 export function objectiveScoreOnly(p: PipelinePoint): number | null {
-  // Infra-only: recompute from weights (= daily_life), ignore stale composites.
-  const bundle = computeObjectivePillars(p, null);
-  return computeObjectiveScore(bundle).objectiveScore;
+  // Same number the chat reads. A weight change in the contract needs a re-export.
+  const living = num(p.s_living) ?? num(p.s_objective);
+  return living == null ? null : clamp100(living);
 }
 
 export function buildCityObjectiveIndex(
@@ -207,7 +221,6 @@ export function buildCityObjectiveIndex(
   for (const f of features) {
     const p = f.properties;
     const h3 = String(p.h3 ?? p.h3_index ?? '');
-    // Infra-only: objectiveScoreOnly ≡ daily_life from current weights.
     const objectiveScore = objectiveScoreOnly(p);
     if (h3) byH3.set(h3, objectiveScore);
     if (objectiveScore != null) sorted.push(objectiveScore);

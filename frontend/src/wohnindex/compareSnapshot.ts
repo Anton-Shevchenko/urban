@@ -1,5 +1,7 @@
 import type { Feature } from 'geojson';
 import { DEFAULT_SIZE_M2 } from '../scoring/engine';
+import { locationScore } from '../scoring/locationScore';
+import type { PipelinePoint } from '../scoring/types';
 import type { ChatHex, CompareItem } from './types';
 
 export const MAX_COMPARE = 6;
@@ -108,12 +110,15 @@ export function makeCompareItem(feature: Feature, city: CompareCityRef): Compare
 
 export function chatHexFromItem(item: CompareItem): ChatHex | null {
   if (!item.citySlug || !item.h3) return null;
-  const living = Number(item.props.s_living);
+  const loc = locationScore(item.props as PipelinePoint, {
+    cityPercentile: item.cityPercentile ?? null,
+  });
+  const living = loc.objectiveScore ?? loc.score;
   return {
     h3: item.h3,
     citySlug: item.citySlug,
     cityName: item.cityName,
-    livingScore: Number.isFinite(living) ? living : null,
+    livingScore: living != null && Number.isFinite(living) ? living : null,
     props: item.props,
   };
 }

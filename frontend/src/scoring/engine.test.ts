@@ -190,3 +190,19 @@ describe('price map overlay', () => {
     expect(engine.comfortScalar({})).toBeNull();
   });
 });
+
+describe('walkability map overlay', () => {
+  it('reads s_walkability via SCORE_PROPS', () => {
+    const ctx = createContextFromFeatures(features, meta);
+    const engine = createScoringEngine(ctx, features);
+    expect(engine.factorScalar('walkability', { s_walkability: 81 })).toBe(81);
+    expect(engine.factorScalar('walkability', {})).toBeNull();
+  });
+
+  it('paints s_walkability when mapMetricMode is the overlay id', () => {
+    const ctx = createContextFromFeatures(features, meta);
+    ctx.mapMetricMode = 'walkability';
+    const engine = createScoringEngine(ctx, features);
+    expect(engine.comfortScalar({ h3: 'test', s_walkability: 81 })).toBe(81);
+  });
+});

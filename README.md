@@ -43,11 +43,16 @@ Persönliche Profile (`PRESETS`) sind bewusst **nicht** Teil des Vertrags: sie
 verändern nur `personalMatchScore` und leben in
 `frontend/src/scoring/formulas.ts`.
 
+Die Säulen-Scores und `s_living` rechnet nur die Pipeline. Die Karte und der
+Chat lesen dieselben exportierten Zahlen. Personal Match gewichtet sie nur um;
+Miet-, Lärm- und Grün-Kurven gibt es im Frontend nicht noch einmal.
+
 ### Alltag (Daily Life)
 
-Gehzeit-Zugänglichkeit mit piecewise Walk-Band (nicht exponentiell):
+Gehzeit-Zugänglichkeit mit piecewise Walk-Band (nicht exponentiell). Die Knoten
+stehen in `walk_minute_bands.default` — ohne 5-Minuten-Plateau:
 
-`0–5 min → 100 · 10 → 70 · 15 → 30 · ≥20 → 0`
+`0 min → 100 · 1 → 88 · 3 → 70 · 5 → 52 · 8 → 32 · 12 → 15 · 16 → 5 · 20 → 0`
 
 Gruppen: Food 30% · Education 20% · Health 15% · Services 15% · Restaurants/Cafés 10% · Leisure 10%.  
 Innerhalb einer Gruppe sind die Kategorien gewichtet (nicht «beste zählt»),
@@ -59,7 +64,15 @@ Straßennetz, Sicherheit, Komfort, Barrierefreiheit → `s_walk`.
 
 ### Grün
 
-40% Parkdistanz (+ Fläche) · 30% Grünanteil · 20% Baumkronen · 10% Wasser → `s_green`.
+`s_green` ist `green_quality_score`: 40 % Erreichbarkeit (Parkdistanz, darin
+35 % Grünanteil im 500-m-Puffer) · 30 % Baumkronen · 20 % Parkfläche · 10 %
+Kühlung (Kronen und Wasser).
+
+Fehlt das Baumkronendach in der ganzen Stadt, gilt stattdessen 55 %
+Erreichbarkeit · 35 % Parkfläche · 10 % Wasser.
+
+Die Mischung 40/30/20/10 (Parkdistanz / Grünanteil / Kronen / Wasser) ist
+`green_composite_lenient` und schreibt `s_green` nicht.
 
 ### ÖPNV
 
@@ -67,7 +80,9 @@ Distanz + Takt + Konnektivität (GTFS wenn verfügbar, sonst OSM) → `s_transit
 
 ### Ruhe
 
-Lärm → Quiet-Score (höher = ruhiger) → `s_quiet`.
+`s_quiet` (höher = ruhiger) ist keine rein absolute Kurve: 55 % absolute
+dB-Skala (45 dB → 100, 85 dB → 0) plus 45 % Rang in der Stadt
+(Log-Perzentile p5–p95).
 
 ### Bezahlbarkeit
 

@@ -1,0 +1,135 @@
+{
+  "note": "Hex order is one city. noise_quiet_score percentiles and green_quality_score use this order. Distractor walk minutes would score near 88 if the frontend recomputed daily life; the export is the score.",
+  "distractors": {
+    "dn_supermarket_min": 1,
+    "dn_market_min": 1,
+    "dn_bakery_min": 1,
+    "dn_doctor_min": 1,
+    "dn_clinic_min": 1,
+    "dn_pharmacy_min": 1,
+    "dn_kita_min": 1,
+    "dn_school_min": 1,
+    "dn_administration_min": 1,
+    "dn_bank_min": 1,
+    "dn_post_min": 1,
+    "dn_restaurant_min": 1,
+    "dn_cafe_min": 1,
+    "dn_sports_min": 1,
+    "dn_playground_min": 1
+  },
+  "hexes": [
+    {
+      "id": "cheap",
+      "raw": {
+        "rent_eur_m2": 8,
+        "noise_db": 45,
+        "green_share_inside_500m": 25,
+        "nearest_park_dist_m": 80,
+        "tree_canopy_pct": 20,
+        "nearest_park_area_ha": 5,
+        "dist_water_m": 200,
+        "s_walk": 70,
+        "s_transit": 65,
+        "dl_food": 90,
+        "dl_health": 70,
+        "dl_education": 80,
+        "dl_services": 60,
+        "dl_restaurants_cafes": 75,
+        "dl_other": 50
+      },
+      "expected": {
+        "s_housing_affordability": 100,
+        "s_quiet": 100,
+        "s_green": 73.3,
+        "s_daily_life": 75,
+        "s_living": 75
+      }
+    },
+    {
+      "id": "twelve",
+      "raw": {
+        "rent_eur_m2": 12,
+        "noise_db": 58,
+        "green_share_inside_500m": 10,
+        "nearest_park_dist_m": 400,
+        "tree_canopy_pct": 8,
+        "nearest_park_area_ha": 1,
+        "dist_water_m": 800,
+        "s_walk": 55,
+        "s_transit": 50,
+        "dl_food": 40,
+        "dl_health": 50,
+        "dl_education": 45,
+        "dl_services": 35,
+        "dl_restaurants_cafes": 30,
+        "dl_other": 25
+      },
+      "expected": {
+        "s_housing_affordability": 100,
+        "s_quiet": 64.3,
+        "s_green": 41,
+        "s_daily_life": 39.3,
+        "s_living": 39.3
+      }
+    },
+    {
+      "id": "expensive",
+      "raw": {
+        "rent_eur_m2": 22,
+        "noise_db": 75,
+        "green_share_inside_500m": 2,
+        "nearest_park_dist_m": 1500,
+        "tree_canopy_pct": 1,
+        "nearest_park_area_ha": 0.2,
+        "dist_water_m": 2000,
+        "s_walk": 30,
+        "s_transit": 40,
+        "dl_food": 20,
+        "dl_health": 15,
+        "dl_education": 25,
+        "dl_services": 10,
+        "dl_restaurants_cafes": 20,
+        "dl_other": 15
+      },
+      "expected": {
+        "s_housing_affordability": 35,
+        "s_quiet": 13.9,
+        "s_green": 10.1,
+        "s_daily_life": 18.3,
+        "s_living": 18.3
+      }
+    },
+    {
+      "id": "loud",
+      "raw": {
+        "rent_eur_m2": 26,
+        "noise_db": 85,
+        "green_share_inside_500m": 5,
+        "nearest_park_dist_m": 900,
+        "tree_canopy_pct": 3,
+        "nearest_park_area_ha": 2,
+        "dist_water_m": 1200,
+        "s_walk": 45,
+        "s_transit": 35,
+        "dl_food": 55,
+        "dl_health": 40,
+        "dl_education": 35,
+        "dl_services": 45,
+        "dl_restaurants_cafes": 50,
+        "dl_other": 30
+      },
+      "expected": {
+        "s_housing_affordability": 10,
+        "s_quiet": 0,
+        "s_green": 26.2,
+        "s_daily_life": 44.3,
+        "s_living": 44.3
+      }
+    }
+  ],
+  "personal_match": {
+    "hex_id": "cheap",
+    "group_multipliers": { "dl_health": 2 },
+    "expected_score": 74.34782608695652
+  }
+}

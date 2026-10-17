@@ -127,6 +127,55 @@ describe('daily life aggregation', () => {
     expect(food.score!).toBeLessThan(70);
   });
 
+  it('uses exported s_living even when walk minutes would score differently', () => {
+    const far = {
+      s_daily_life: 100,
+      s_living: 100,
+      rent_eur_m2: 12,
+      noise_db: 45,
+      nearest_park_dist_m: 50,
+      dn_supermarket_min: 12,
+      dn_bakery_min: 12,
+      dn_market_min: 12,
+      dn_pharmacy_min: 12,
+      dn_doctor_min: 12,
+      dn_clinic_min: 12,
+      dn_kita_min: 12,
+      dn_school_min: 12,
+      dn_administration_min: 12,
+      dn_bank_min: 12,
+      dn_post_min: 12,
+      dn_restaurant_min: 12,
+      dn_cafe_min: 12,
+      dn_sports_min: 12,
+      dn_playground_min: 12,
+    };
+    const near = {
+      ...far,
+      s_daily_life: 40,
+      s_living: 40,
+      dn_supermarket_min: 1,
+      dn_bakery_min: 1,
+      dn_market_min: 1,
+      dn_pharmacy_min: 1,
+      dn_doctor_min: 1,
+      dn_clinic_min: 1,
+      dn_kita_min: 1,
+      dn_school_min: 1,
+      dn_administration_min: 1,
+      dn_bank_min: 1,
+      dn_post_min: 1,
+      dn_restaurant_min: 1,
+      dn_cafe_min: 1,
+      dn_sports_min: 1,
+      dn_playground_min: 1,
+    };
+    expect(locationScore(far).objectiveScore).toBe(100);
+    expect(locationScore(near).objectiveScore).toBe(40);
+    expect(locationScore(far).pillars.daily_life).toBe(100);
+    expect(locationScore(near).pillars.daily_life).toBe(40);
+  });
+
   it('does not use precomputed dl_* max groups for objective', () => {
     const withDl = dailyLifeFromGroups({
       dl_food: 100,
@@ -140,20 +189,26 @@ describe('daily life aggregation', () => {
 });
 
 describe('housing affordability', () => {
-  it('does not blend walk/transit/daily into housing pillar', () => {
-    const a = scoreHousingAffordability({
-      rent_eur_m2: 20,
+  it('reads the exported benchmark and does not rescore rent', () => {
+    const fromRent = scoreHousingAffordability({
+      rent_eur_m2: 12,
       s_walk: 100,
       s_transit: 100,
       s_daily_life: 100,
     });
-    const b = scoreHousingAffordability({
-      rent_eur_m2: 20,
+    expect(fromRent.score).toBeNull();
+    const cheap = scoreHousingAffordability({
+      rent_eur_m2: 12,
+      s_housing_affordability: 100,
       s_walk: 0,
-      s_transit: 0,
-      s_daily_life: 0,
     });
-    expect(a.score).toBe(b.score);
+    const sameRentHighWalk = scoreHousingAffordability({
+      rent_eur_m2: 12,
+      s_housing_affordability: 100,
+      s_walk: 100,
+    });
+    expect(cheap.score).toBe(100);
+    expect(sameRentHighWalk.score).toBe(cheap.score);
   });
 });
 

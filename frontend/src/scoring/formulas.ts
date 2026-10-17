@@ -14,12 +14,8 @@ import {
   LIVING_WEIGHTS,
   OBJECTIVE_WEIGHTS,
   PERSONAL_PILLAR_KEYS,
-  dailyLifeFromGroups,
-  scoreCentrality,
-  scoreGreen,
-  scoreHousingAffordability,
-  scoreQuiet,
-  scoreTransit,
+  computeObjectivePillars,
+  dailyLifeForPersonalMatch,
   scoreWalk,
   walkMinuteBandScore,
 } from './objective';
@@ -52,6 +48,7 @@ export {
   categoryScoredValue,
   computeObjectivePillars,
   computeObjectiveScore,
+  dailyLifeForPersonalMatch,
   dailyLifeFromGroups,
   emptyScored,
   scoreCentrality,
@@ -161,20 +158,15 @@ export function pillarScores(
   _affordabilityFocus = 0,
 ): Record<string, number | null> {
   void _affordabilityFocus;
-  const daily = hasCustomGroupMultipliers(groupMultipliers)
-    ? dailyLifeFromGroups(p, groupMultipliers)
-    : dailyLifeFromGroups(p, null);
+  const pillars = { ...computeObjectivePillars(p).pillars };
+  if (hasCustomGroupMultipliers(groupMultipliers)) {
+    pillars.daily_life = dailyLifeForPersonalMatch(p, groupMultipliers).score;
+  }
 
   return {
-    daily_life: daily.score,
-    walk: scoreWalk(p).score,
-    green: scoreGreen(p).score,
-    transit: scoreTransit(p).score,
-    quiet: scoreQuiet(p).score,
-    housing_affordability: scoreHousingAffordability(p).score,
-    centrality: scoreCentrality(p).score,
+    ...pillars,
     // Legacy alias for older UI
-    housing_value: scoreHousingAffordability(p).score,
+    housing_value: pillars.housing_affordability,
   };
 }
 
@@ -235,7 +227,7 @@ export function walkMinuteDecayScore(minutes: unknown): number | null {
   return walkMinuteBandScore(minutes);
 }
 
-/** Derive walking quality when pipeline pillar is missing (schema < 11). */
+/** Exported walk pillar. Raw wq_* components are not rescored on the client. */
 export function deriveWalkingQuality(p: PipelinePoint): number | null {
   return scoreWalk(p).score;
 }
